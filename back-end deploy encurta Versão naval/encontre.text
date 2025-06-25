@@ -1,0 +1,1322 @@
+const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const { Pool } = require("pg");
+const axios = require("axios"); // <--- MUDANÇA AQUI
+const app = express();
+const port = 8080;
+
+app.use(bodyParser.json());
+app.use(cors());
+
+const pool = new Pool({
+  connectionString:
+    "postgresql://postgres.ikjhufiucbzixzykedhr:@Tonystark19@aws-0-sa-east-1.pooler.supabase.com:6543/postgres",
+  ssl: { rejectUnauthorized: false },
+});
+
+pool.connect((err) => {
+  if (err) console.error("Erro ao conectar ao Supabase:", err);
+  else console.log("Conectado ao Supabase");
+});
+
+/**
+ * Endpoint para enviar avaliação.
+ * Agora o front-end envia o nome do comércio (comercio_nome) e o servidor
+ * busca o id correspondente na tabela de comercios.
+ */
+app.post("/rate-business", async (req, res) => {
+  const { comercio_nome, nome, nota, valor_gasto, horario_pico } = req.body;
+
+  if (!comercio_nome || !nome || !nota || !valor_gasto || !horario_pico) {
+    return res
+      .status(400)
+      .json({ message: "Todos os campos são obrigatórios." });
+  }
+
+  try {
+    // Busca o id do comércio pelo nome
+    const result = await pool.query(
+      `SELECT id FROM public.comercios WHERE nome = $1`,
+      [comercio_nome]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Comércio não encontrado." });
+    }
+
+    const comercio_id = result.rows[0].id;
+
+    await pool.query(
+      `INSERT INTO public.ratings (comercio_id, nome, nota, valor_gasto, horario_pico)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [comercio_id, nome, nota, valor_gasto, horario_pico]
+    );
+
+    res.status(200).json({ message: "Avaliação enviada com sucesso!" });
+  } catch (err) {
+    console.error("Erro ao enviar avaliação:", err);
+    res.status(500).json({ message: "Erro ao enviar avaliação." });
+  }
+});
+
+app.get("/business-ratings-summary", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        c.id AS comercio_id, 
+        c.nome AS comercio_nome, 
+        COUNT(r.id) AS total_avaliacoes, 
+        COALESCE(AVG(r.nota), 0) AS nota_media, 
+        COALESCE(MIN(r.valor_gasto), 0) AS menor_valor_gasto, 
+        STRING_AGG(DISTINCT r.horario_pico, ', ') AS horario_pico
+      FROM public.comercios c
+      LEFT JOIN public.ratings r ON c.id = r.comercio_id
+      GROUP BY c.id, c.nome
+      ORDER BY nota_media DESC, menor_valor_gasto ASC;
+    `);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Nenhum dado encontrado." });
+    }
+
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error("Erro ao buscar resumo das avaliações:", error);
+    res.status(500).json({ message: "Erro ao buscar resumo das avaliações." });
+  }
+});
+
+/**
+ * Endpoint para buscar comércios pelo nome e/ou categoria.
+ * Se for informado somente uma categoria (diferente de "Todos"), todos os
+ * comércios daquela categoria serão retornados.
+ */
+// Endpoint para buscar comércios pelo nome ou categoria
+app.get("/search-business", async (req, res) => {
+  const { nome, categoria } = req.query;
+
+  // Verifique se algum parâmetro foi enviado
+  if (!nome && categoria === "Todos") {
+    return res
+      .status(400)
+      .json({ message: "Informe o nome ou selecione uma categoria." });
+  }
+
+  try {
+    let query = "SELECT * FROM public.comercios WHERE 1=1";
+    let values = [];
+
+    // Se nome foi fornecido, adiciona à consulta
+    if (nome) {
+      values.push(`%${nome.trim()}%`);
+      query += ` AND nome ILIKE $${values.length}`;
+    }
+
+    // Se categoria foi fornecida e não é "Todos", adiciona à consulta
+    if (categoria && categoria !== "Todos") {
+      values.push(`%${categoria.trim()}%`);
+      query += ` AND categoria ILIKE $${values.length}`;
+    }
+
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Nenhum comércio encontrado." });
+    }
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("Erro ao buscar comércios:", err);
+    res.status(500).json({ message: "Erro ao buscar comércios." });
+  }
+});
+
+/* --------------------------------------------------------------------------
+   Endpoints de Usuários
+-------------------------------------------------------------------------- */
+
+// Simulação de sessão (armazenando usuários logados em memória)
+const sessoes = {};
+
+// Registrar um usuário
+app.post("/api/usuarios/registro", async (req, res) => {
+  const { nome, email, senha } = req.body;
+
+  try {
+    const result = await pool.query(
+      "INSERT INTO usuarios (nome, email, senha) VALUES ($1, $2, $3) RETURNING id, nome, email",
+      [nome, email, senha]
+    );
+
+    res.status(201).json({
+      message: "Usuário registrado com sucesso!",
+      user: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Erro ao registrar usuário:", error);
+    res.status(500).json({ error: "Erro ao registrar usuário." });
+  }
+});
+
+// Login
+app.post("/api/usuarios/login", async (req, res) => {
+  const { email, senha } = req.body;
+
+  try {
+    const result = await pool.query("SELECT * FROM usuarios WHERE email = $1", [
+      email,
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: "Usuário não encontrado." });
+    }
+
+    const usuario = result.rows[0];
+
+    if (usuario.senha !== senha) {
+      return res.status(401).json({ error: "Senha incorreta." });
+    }
+
+    // Criar uma "sessão" (simplesmente armazenando o ID do usuário)
+    const token = `${usuario.id}-${Date.now()}`;
+    sessoes[token] = usuario;
+
+    res.json({ message: "Login bem-sucedido!", token });
+  } catch (error) {
+    console.error("Erro ao fazer login:", error);
+    res.status(500).json({ error: "Erro ao fazer login." });
+  }
+});
+
+// Obter dados do usuário logado
+app.get("/api/usuarios/me", (req, res) => {
+  const token = req.headers["authorization"];
+
+  if (!token || !sessoes[token]) {
+    return res.status(403).json({ error: "Não autorizado." });
+  }
+
+  res.json(sessoes[token]);
+});
+
+// Logout (remover sessão)
+app.post("/api/usuarios/logout", (req, res) => {
+  const token = req.headers["authorization"];
+
+  if (sessoes[token]) {
+    delete sessoes[token];
+  }
+
+  res.json({ message: "Logout realizado com sucesso." });
+});
+
+// Obter dados do usuário logado
+app.get("/api/usuarios/me", (req, res) => {
+  const token = req.headers["authorization"];
+
+  if (!token || !sessoes[token]) {
+    return res.status(403).json({ error: "Não autorizado." });
+  }
+
+  res.json(sessoes[token]);
+});
+
+// Logout (remover sessão)
+app.post("/api/usuarios/logout", (req, res) => {
+  const token = req.headers["authorization"];
+
+  if (sessoes[token]) {
+    delete sessoes[token];
+  }
+
+  res.json({ message: "Logout realizado com sucesso." });
+});
+
+/**
+ * Endpoint para listar os comércios avaliados.
+ * Junta as tabelas de comercios e ratings para retornar:
+ * - Nome do comércio (comercio_nome)
+ * - Nome do avaliador (avaliador_nome)
+ * - Nota, valor gasto e horário de pico
+ */
+app.get("/get-rated-businesses", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT c.nome AS comercio_nome, 
+              r.nome AS avaliador_nome, 
+              r.nota, 
+              r.valor_gasto, 
+              r.horario_pico
+       FROM public.comercios c
+       JOIN public.ratings r ON c.id = r.comercio_id`
+    );
+
+    const comerciosAvaliados = result.rows;
+
+    if (comerciosAvaliados.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "Nenhum comércio avaliado encontrado." });
+    }
+
+    res.status(200).json(comerciosAvaliados);
+  } catch (err) {
+    console.error("Erro ao obter comercios avaliados:", err);
+    res.status(500).json({ message: "Erro ao obter comercios avaliados." });
+  }
+});
+
+app.get("/search-ratings", async (req, res) => {
+  let {
+    comercio_nome,
+    avaliador_nome,
+    nota_min,
+    nota_max,
+    valor_min,
+    valor_max,
+    horario_pico,
+  } = req.query;
+
+  try {
+    let query = `
+        SELECT c.nome AS comercio_nome, 
+               r.nome AS avaliador_nome, 
+               r.nota, 
+               r.valor_gasto, 
+               r.horario_pico
+        FROM public.comercios c
+        JOIN public.ratings r ON c.id = r.comercio_id
+        WHERE 1=1
+      `;
+    let values = [];
+
+    // Filtros opcionais
+    if (comercio_nome) {
+      values.push(`%${comercio_nome.trim()}%`);
+      query += ` AND c.nome ILIKE $${values.length}`;
+    }
+
+    if (avaliador_nome) {
+      values.push(`%${avaliador_nome.trim()}%`);
+      query += ` AND r.nome ILIKE $${values.length}`;
+    }
+
+    if (nota_min) {
+      values.push(Number(nota_min));
+      query += ` AND r.nota >= $${values.length}`;
+    }
+
+    if (nota_max) {
+      values.push(Number(nota_max));
+      query += ` AND r.nota <= $${values.length}`;
+    }
+
+    if (valor_min) {
+      values.push(Number(valor_min));
+      query += ` AND r.valor_gasto >= $${values.length}`;
+    }
+
+    if (valor_max) {
+      values.push(Number(valor_max));
+      query += ` AND r.valor_gasto <= $${values.length}`;
+    }
+
+    if (horario_pico) {
+      values.push(horario_pico);
+      query += ` AND r.horario_pico = $${values.length}`;
+    }
+
+    // Ordena por nota (maiores primeiro) e depois por valor gasto
+    query += ` ORDER BY r.nota DESC, r.valor_gasto DESC LIMIT 50`;
+
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Nenhuma avaliação encontrada." });
+    }
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("Erro ao buscar avaliações:", err);
+    res.status(500).json({ message: "Erro ao buscar avaliações." });
+  }
+});
+
+// Endpoint para exibir todos os dados de um comércio
+app.get("/get-business-details", async (req, res) => {
+  const { nome, id } = req.query;
+
+  let query = "SELECT * FROM public.comercios WHERE 1=1";
+  let params = [];
+
+  // Verifica se o nome ou ID foi fornecido
+  if (nome) {
+    query += " AND nome ILIKE $1"; // ILIKE para busca case-insensitive
+    params.push(`%${nome}%`);
+  }
+  if (id) {
+    query += " AND id = $2";
+    params.push(id);
+  }
+
+  try {
+    const result = await pool.query(query, params);
+    if (result.rows.length > 0) {
+      res.json(result.rows[0]); // Retorna o primeiro comércio encontrado
+    } else {
+      res.status(404).json({ message: "Comércio não encontrado." });
+    }
+  } catch (error) {
+    console.error("Erro ao buscar dados do comércio:", error);
+    res.status(500).json({ message: "Erro ao buscar dados do comércio." });
+  }
+});
+
+// Endpoint 1: Menor preço por negócio (com categoria) do menor para o maior
+app.get("/lowest-price-by-category", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        c.categoria, 
+        c.nome AS comercio_nome, 
+        MIN(r.valor_gasto) AS menor_valor_gasto
+      FROM public.comercios c
+      JOIN public.ratings r ON c.id = r.comercio_id
+      GROUP BY c.categoria, c.nome
+      ORDER BY menor_valor_gasto ASC;
+    `);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Nenhum dado encontrado." });
+    }
+
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error("Erro ao buscar o menor preço por categoria:", error);
+    res
+      .status(500)
+      .json({ message: "Erro ao buscar o menor preço por categoria." });
+  }
+});
+
+// Endpoint 2: Melhor horário de pico para cada comércio (baseado no menor valor_gasto)
+app.get("/best-peak-hour-per-business", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT ON (c.id) 
+        c.nome AS comercio_nome, 
+        c.categoria, 
+        r.horario_pico, 
+        r.valor_gasto
+      FROM public.comercios c
+      JOIN public.ratings r ON c.id = r.comercio_id
+      ORDER BY c.id, r.valor_gasto ASC;
+    `);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Nenhum dado encontrado." });
+    }
+
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error(
+      "Erro ao buscar o melhor horário de pico por comércio:",
+      error
+    );
+    res.status(500).json({
+      message: "Erro ao buscar o melhor horário de pico por comércio.",
+    });
+  }
+});
+
+app.get("/all-businesses-details", async (req, res) => {
+  try {
+    const result = await pool.query(`
+SELECT 
+  c.id AS comercio_id,
+  c.nome AS comercio_nome,
+  c.cidade,
+  c.endereco,
+  COUNT(r.id) AS total_avaliacoes,
+  COALESCE(AVG(r.nota), 0) AS nota_media,
+  CASE WHEN COUNT(r.id) > 0 THEN MIN(r.valor_gasto) ELSE NULL END AS menor_valor_gasto,
+  (
+    SELECT STRING_AGG(r2.horario_pico, ', ')
+    FROM (
+      SELECT r2.horario_pico
+      FROM public.ratings r2
+      WHERE r2.comercio_id = c.id
+      ORDER BY r2.created_at DESC
+      LIMIT 2
+    ) AS r2
+  ) AS horario_pico,
+  MAX(r.valor_gasto) AS preco,
+  (
+    SELECT r3.horario_pico 
+    FROM public.ratings r3 
+    WHERE r3.comercio_id = c.id 
+    ORDER BY r3.created_at DESC 
+    LIMIT 1
+  ) AS hora
+FROM public.comercios c
+LEFT JOIN public.ratings r ON c.id = r.comercio_id
+GROUP BY c.id, c.nome, c.cidade, c.endereco
+ORDER BY nota_media DESC, menor_valor_gasto ASC;
+
+    `);
+
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error("Erro ao buscar detalhes de todos os comercios:", error);
+    res
+      .status(500)
+      .json({ message: "Erro ao buscar detalhes de todos os comercios." });
+  }
+});
+
+// Endpoint para obter ranking dos avaliadores (usuários que mais fizeram avaliações)
+app.get("/all-users-details", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        nome AS usuario_nome, 
+        COUNT(id) AS total_avaliacoes
+      FROM public.ratings
+      GROUP BY nome
+      ORDER BY total_avaliacoes DESC;
+    `);
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error("Erro ao buscar dados dos usuários:", error);
+    res.status(500).json({ message: "Erro ao buscar dados dos usuários." });
+  }
+});
+
+app.get("/top-three-businesses", async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        c.id AS comercio_id,
+        c.nome AS comercio_nome,
+        COUNT(r.id) AS total_avaliacoes,
+        COALESCE(AVG(r.nota), 0) AS nota_media,
+        CASE WHEN COUNT(r.id) > 0 THEN MIN(r.valor_gasto) ELSE NULL END AS menor_valor_gasto,
+        STRING_AGG(r.horario_pico, ', ') AS horario_pico
+      FROM public.comercios c
+      LEFT JOIN public.ratings r ON c.id = r.comercio_id
+      GROUP BY c.id, c.nome
+      ORDER BY nota_media DESC, menor_valor_gasto ASC
+      LIMIT 3;
+    `;
+    const result = await pool.query(query);
+
+    if (result.rows.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "Nenhum comércio avaliado encontrado." });
+    }
+
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error("Erro ao buscar os top 3 comércios:", error);
+    res.status(500).json({ message: "Erro ao buscar os top 3 comércios." });
+  }
+});
+
+app.post("/add-fuel-price", async (req, res) => {
+  const { nome, endereco, cidade, estado, tipo_combustivel, preco } = req.body;
+
+  if (!nome || !endereco || !cidade || !estado || !tipo_combustivel || !preco) {
+    return res
+      .status(400)
+      .json({ message: "Todos os campos são obrigatórios." });
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO postos_combustivel (nome, endereco, cidade, estado, tipo_combustivel, preco)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [nome, endereco, cidade, estado, tipo_combustivel, preco]
+    );
+    res.status(201).json({ message: "Posto cadastrado com sucesso!" });
+  } catch (err) {
+    console.error("Erro ao cadastrar posto:", err);
+    res.status(500).json({ message: "Erro ao cadastrar posto." });
+  }
+});
+
+// Endpoint para editar o nome e o preço de um posto
+app.put("/fuel-station/:id", async (req, res) => {
+  const { id } = req.params;
+  let { nome, preco } = req.body;
+
+  if (!nome || !preco) {
+    return res.status(400).json({ message: "Nome e preço são obrigatórios." });
+  }
+
+  // Converter vírgula para ponto, se necessário, e garantir que o valor seja numérico
+  preco = parseFloat(preco.toString().replace(",", "."));
+  if (isNaN(preco)) {
+    return res.status(400).json({ message: "Preço inválido." });
+  }
+
+  try {
+    const result = await pool.query(
+      "UPDATE postos_combustivel SET nome = $1, preco = $2 WHERE id = $3 RETURNING *",
+      [nome, preco, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Registro não encontrado." });
+    }
+
+    res.status(200).json({
+      message: "Posto atualizado com sucesso.",
+      registro: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Erro ao atualizar o posto:", error);
+    res.status(500).json({ message: "Erro ao atualizar o posto." });
+  }
+});
+
+app.get("/fuel-prices", async (req, res) => {
+  const { cidade, estado } = req.query; // Extrai os parâmetros 'cidade' e 'estado' da query
+
+  try {
+    // Query condicional: se cidade e estado são fornecidos, filtra por esses valores
+    let query = `
+      SELECT id, nome, endereco, cidade, estado, tipo_combustivel, preco
+      FROM postos_combustivel
+    `;
+
+    const queryParams = [];
+
+    if (cidade) {
+      query += " WHERE cidade = $1";
+      queryParams.push(cidade);
+    }
+
+    if (estado) {
+      if (queryParams.length > 0) {
+        query += " AND estado = $2";
+      } else {
+        query += " WHERE estado = $1";
+      }
+      queryParams.push(estado);
+    }
+
+    query += " ORDER BY preco ASC;";
+
+    const result = await pool.query(query, queryParams);
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error("Erro ao buscar preços:", error);
+    res.status(500).json({ message: "Erro ao buscar preços." });
+  }
+});
+
+// Endpoint para editar somente o valor (preço) de um posto
+app.put("/fuel-price/:id", async (req, res) => {
+  const { id } = req.params;
+  const { preco } = req.body;
+
+  if (!preco) {
+    return res.status(400).json({ message: "O novo valor é obrigatório." });
+  }
+
+  try {
+    const result = await pool.query(
+      "UPDATE postos_combustivel SET preco = $1 WHERE id = $2 RETURNING *",
+      [preco, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Registro não encontrado." });
+    }
+
+    res.status(200).json({
+      message: "Valor atualizado com sucesso.",
+      registro: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Erro ao atualizar o valor:", error);
+    res.status(500).json({ message: "Erro ao atualizar o valor." });
+  }
+});
+
+// Endpoint para listar todos os postos de combustível com preços ordenados do mais barato ao mais caro
+app.get("/all-fuel-stations", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        nome, 
+        endereco, 
+        tipo_combustivel, 
+        preco
+      FROM postos_combustivel
+      ORDER BY preco ASC;
+    `);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Nenhum posto encontrado." });
+    }
+
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error("Erro ao buscar postos de combustível:", error);
+    res.status(500).json({ message: "Erro ao buscar postos de combustível." });
+  }
+});
+
+app.delete("/fuel-station/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      "DELETE FROM postos_combustivel WHERE id = $1 RETURNING *",
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Posto não encontrado." });
+    }
+
+    res.status(200).json({ message: "Posto excluído com sucesso." });
+  } catch (error) {
+    console.error("Erro ao excluir o posto:", error);
+    res.status(500).json({ message: "Erro ao excluir o posto." });
+  }
+});
+
+app.post("/comercios", async (req, res) => {
+  // 1. Extraia TODOS os campos relevantes do req.body
+  const {
+    nome,
+    categoria,
+    cidade,
+    estado,
+    telefone,
+    imagem_capa,
+    horario_funcionamento_feriados, // Novo
+    imagem_capa_2, // Novo
+    imagem_capa_3, // Novo
+    endereco, // Novo
+    link_cardapio, // Adicional (do seu formulário)
+    link_facebook, // Adicional (do seu formulário)
+    link_instagram, // Adicional (do seu formulário)
+    link_site_pessoal, // Adicional (do seu formulário)
+    // Adicione outros campos que seu formulário envia e você quer salvar
+  } = req.body;
+
+  try {
+    // 2. Atualize a query SQL para incluir as novas colunas
+    const query = `
+      INSERT INTO public.comercios (
+        nome, categoria, cidade, estado, telefone, imagem_capa,
+        horario_funcionamento_feriados,      
+        imagem_capa_2,                      
+        imagem_capa_3,                        
+        endereco,                             
+        link_cardapio,                       
+        link_facebook,                      
+        link_instagram,                      
+        link_site_pessoal                    
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) -- 3. Adicione mais placeholders
+      RETURNING id;
+    `;
+
+    // 4. Adicione os valores correspondentes na ordem correta
+    const values = [
+      nome,
+      categoria,
+      cidade,
+      estado,
+      telefone,
+      imagem_capa,
+      horario_funcionamento_feriados, // Novo valor
+      imagem_capa_2, // Novo valor
+      imagem_capa_3, // Novo valor
+      endereco, // Novo valor
+      link_cardapio, // Adicional
+      link_facebook, // Adicional
+      link_instagram, // Adicional
+      link_site_pessoal, // Adicional
+      // Adicione outros valores aqui
+    ];
+    const result = await pool.query(query, values);
+
+    res.status(201).json({
+      id: result.rows[0].id,
+      message: "Comércio cadastrado com sucesso!",
+    });
+  } catch (err) {
+    console.error("Erro ao cadastrar o comércio:", err.message); // err.message pode ser mais útil
+    // Verifique também err.detail ou err.stack para mais informações do erro do Postgre
+    console.error("Detalhes do erro:", err.detail);
+    console.error("Stack do erro:", err.stack);
+    res
+      .status(500)
+      .json({ error: "Erro interno do servidor ao cadastrar comércio." });
+  }
+});
+app.get("/comercios", async (req, res) => {
+  try {
+    const { categoria } = req.query;
+
+    let query = `
+      SELECT * FROM public.comercios
+      ${categoria ? "WHERE categoria = $1" : ""}
+      ORDER BY 
+        CASE 
+          WHEN posicao BETWEEN 1 AND 5 THEN posicao
+          ELSE 999 -- coloca os comércios com posicao = 0 no final
+        END
+    `;
+
+    const params = categoria ? [categoria] : [];
+
+    const result = await pool.query(query, params);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Erro ao buscar comércios:", err);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+app.get("/comercios", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM public.comercios");
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Erro ao buscar comércios:", err);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+app.get("/comercios/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const query = "SELECT * FROM public.comercios WHERE id = $1";
+    const result = await pool.query(query, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Comércio não encontrado" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Erro ao buscar comércio por ID:", err);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+// Endpoint para registrar um clique
+app.post("/api/cliques", async (req, res) => {
+  const { comercio_id, link, comercio_nome } = req.body;
+
+  if (!comercio_id || !link || !comercio_nome) {
+    return res
+      .status(400)
+      .json({ error: "comercio_id, link, and comercio_nome are required" });
+  }
+
+  try {
+    const result = await pool.query(
+      "INSERT INTO cliques (comercio_id, link, comercio_nome) VALUES ($1, $2, $3) RETURNING *",
+      [comercio_id, link, comercio_nome]
+    );
+
+    res
+      .status(201)
+      .json({ message: "Clique registrado com sucesso", data: result.rows[0] });
+  } catch (error) {
+    console.error("Erro ao registrar clique:", error);
+    res
+      .status(500)
+      .json({ error: "Erro ao registrar clique", details: error.message });
+  }
+});
+
+app.get("/api/cliques/por-comercio", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        c.comercio_id,
+        com.nome AS comercio_nome,
+        com.posicao,
+        COUNT(*) AS total_cliques
+      FROM cliques c
+      JOIN comercios com ON com.id = c.comercio_id
+      GROUP BY c.comercio_id, com.nome, com.posicao
+      ORDER BY com.posicao ASC NULLS LAST
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Erro ao buscar cliques por comércio:", error);
+    res.status(500).json({ error: "Erro ao buscar cliques por comércio" });
+  }
+});
+
+// Endpoint para buscar os cliques por comércio
+
+app.get("/nomes-comercios", async (req, res) => {
+  try {
+    const { categoria } = req.query;
+
+    const query = `
+      SELECT nome
+      FROM public.comercios
+      ${categoria ? "WHERE categoria = $1" : ""}
+      ORDER BY 
+        CASE 
+          WHEN posicao BETWEEN 1 AND 5 THEN posicao
+          ELSE 999
+        END
+    `;
+
+    const params = categoria ? [categoria] : [];
+
+    const result = await pool.query(query, params);
+
+    // Retorna apenas os nomes como array de strings
+    const nomes = result.rows.map((row) => row.nome);
+
+    res.json(nomes);
+  } catch (err) {
+    console.error("Erro ao buscar nomes dos comércios:", err);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+// PATCH /comercios/:id/formas_pagamento
+app.patch("/comercios/:id/formas_pagamento", async (req, res) => {
+  const { id } = req.params;
+  const { formas_pagamento } = req.body;
+
+  if (typeof formas_pagamento !== "boolean") {
+    return res
+      .status(400)
+      .json({ error: "formas_pagamento deve ser true ou false" });
+  }
+
+  try {
+    const result = await pool.query(
+      "UPDATE public.comercios SET formas_pagamento = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *",
+      [formas_pagamento, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Comércio não encontrado" });
+    }
+
+    return res.json({ sucesso: true, comercio: result.rows[0] });
+  } catch (error) {
+    console.error("Erro ao atualizar formas_pagamento:", error);
+    return res.status(500).json({ error: "Erro interno ao atualizar" });
+  }
+});
+
+// 🔹 Listar todas as lojas (usando pool.query)
+app.get("/api/lojas", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM public.lojas"); // Ou public.comercios se for a mesma
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Erro ao listar lojas via pool:", err.message);
+    res
+      .status(500)
+      .json({ error: "Erro interno do servidor ao listar lojas." });
+  }
+});
+
+// 🔹 Listar os produtos de uma loja específica (campo jsonb)
+app.get("/api/lojas/:id/produtos", async (req, res) => {
+  const lojaId = req.params.id;
+
+  try {
+    // Busca a loja pelo ID e pega só os produtos
+    const result = await pool.query(
+      "SELECT produtos FROM public.lojas WHERE id = $1",
+      [lojaId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Loja não encontrada." });
+    }
+
+    const produtos = result.rows[0].produtos || [];
+
+    res.json(produtos); // Já manda os produtos direto
+  } catch (err) {
+    console.error("Erro ao buscar produtos da loja:", err.message);
+    res.status(500).json({ error: "Erro interno ao buscar produtos da loja." });
+  }
+});
+
+// 🔹 Cadastrar uma nova loja
+app.post("/api/lojas", async (req, res) => {
+  const {
+    nome,
+    categoria,
+    imagem,
+    cidade,
+    bairro,
+    whatsapp,
+    chave_pix,
+    taxa_entrega, // No frontend, isso é um array de objetos ou null
+    produtos, // No frontend, isso é um objeto (categorias como chaves, arrays de produtos como valor) ou null
+    horario_abre,
+    horario_fecha,
+    descricao,
+    endereco,
+  } = req.body;
+
+  // Para depuração, adicione este log para ver o que está chegando:
+  console.log("Dados recebidos no backend:");
+  console.log(
+    "typeof taxa_entrega:",
+    typeof taxa_entrega,
+    "| taxa_entrega:",
+    JSON.stringify(taxa_entrega, null, 2)
+  );
+  console.log(
+    "typeof produtos:",
+    typeof produtos,
+    "| produtos:",
+    JSON.stringify(produtos, null, 2)
+  );
+
+  if (!nome || !categoria) {
+    return res
+      .status(400)
+      .json({ error: "Campos obrigatórios: nome e categoria." });
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO public.lojas (
+        nome, categoria, imagem, cidade, bairro, whatsapp, 
+        chave_pix, taxa_entrega, produtos, horario_abre, 
+        horario_fecha, descricao, endereco
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING *`,
+      [
+        nome,
+        categoria,
+        imagem,
+        cidade,
+        bairro,
+        whatsapp,
+        chave_pix,
+        taxa_entrega !== undefined ? JSON.stringify(taxa_entrega) : null,
+        produtos, // Passando o objeto produtos diretamente
+        horario_abre,
+        horario_fecha,
+        descricao,
+        endereco,
+      ]
+    );
+    res.status(201).json({
+      message: "Loja cadastrada com sucesso!",
+      loja: result.rows[0],
+    });
+  } catch (err) {
+    console.error("Erro ao cadastrar loja:", err.message, err.stack); // Adicione err.stack para mais detalhes
+    if (err.code === "23505") {
+      // Código de violação de constraint unique
+      return res.status(409).json({
+        error: "Dados duplicados (ex: nome ou identificador já existe).",
+      });
+    }
+    // Verifique outros códigos de erro do PostgreSQL se necessário
+    // Ex: '22P02' para sintaxe inválida para tipo json/jsonb
+    if (err.code === "22P02" && err.message.includes("json")) {
+      console.error("Possível erro de formato JSON:", err);
+      return res.status(400).json({
+        error: "Formato inválido para dados JSON (produtos ou taxa_entrega).",
+      });
+    }
+    res
+      .status(500)
+      .json({ error: "Erro interno do servidor ao cadastrar loja." });
+  }
+});
+
+/* --------------------------------------------------------------------------
+    Endpoint para Cadastro de Comércio com Vínculo ao Usuário
+-------------------------------------------------------------------------- */
+
+app.post("/api/comercios", async (req, res) => {
+  // 1. Obter o token de autorização para identificar o usuário logado
+  const token = req.headers["authorization"];
+
+  if (!token || !sessoes[token]) {
+    return res.status(403).json({
+      error: "Não autorizado. Faça o login para cadastrar um comércio.",
+    });
+  }
+
+  // Obter o ID do usuário da sessão
+  const usuarioId = sessoes[token].id;
+  const usuarioJaTemComercio = sessoes[token].comercio_id;
+
+  if (usuarioJaTemComercio) {
+    return res
+      .status(400)
+      .json({ error: "Este usuário já possui um comércio cadastrado." });
+  }
+
+  // 2. Obter os dados do novo comércio do corpo da requisição
+  const { nome, categoria, cidade, estado /* ...outros campos do comércio */ } =
+    req.body;
+
+  if (!nome || !categoria) {
+    return res
+      .status(400)
+      .json({ error: "Nome e categoria são campos obrigatórios." });
+  }
+
+  // Usar um "client" do pool para a transação
+  const client = await pool.connect();
+
+  try {
+    // 3. Iniciar a transação
+    await client.query("BEGIN");
+
+    // 4. Inserir o novo comércio na tabela 'comercios' e obter o ID gerado
+    const queryInsertComercio = `
+      INSERT INTO comercios (nome, categoria, cidade, estado /* ...outros campos */) 
+      VALUES ($1, $2, $3, $4 /* ...outros valores */) 
+      RETURNING id
+    `;
+    const valuesInsertComercio = [
+      nome,
+      categoria,
+      cidade,
+      estado /* ...outros valores */,
+    ];
+
+    const resultadoComercio = await client.query(
+      queryInsertComercio,
+      valuesInsertComercio
+    );
+    const novoComercioId = resultadoComercio.rows[0].id;
+
+    // 5. Atualizar a tabela 'usuarios' com o ID do novo comércio
+    const queryUpdateUsuario = `
+      UPDATE usuarios 
+      SET comercio_id = $1 
+      WHERE id = $2
+    `;
+    await client.query(queryUpdateUsuario, [novoComercioId, usuarioId]);
+
+    // 6. Se tudo deu certo, confirmar a transação
+    await client.query("COMMIT");
+
+    // Atualiza a sessão em memória para refletir a mudança
+    sessoes[token].comercio_id = novoComercioId;
+
+    res.status(201).json({
+      message: "Comércio cadastrado e vinculado ao seu usuário com sucesso!",
+      comercioId: novoComercioId,
+    });
+  } catch (error) {
+    // 7. Se algo deu errado, desfazer a transação
+    await client.query("ROLLBACK");
+    console.error("Erro ao cadastrar comércio:", error);
+    res.status(500).json({ error: "Erro interno ao cadastrar o comércio." });
+  } finally {
+    // 8. Liberar o cliente de volta para o pool
+    client.release();
+  }
+});
+
+app.post("/api/groq-encontre", async (req, res) => {
+  const { prompt } = req.body;
+  if (!prompt) return res.status(400).json({ error: "Prompt ausente." });
+
+  const userIP = req.ip;
+  global.contextoEncontre = global.contextoEncontre || {};
+  global.cacheEncontre = global.cacheEncontre || {};
+
+  if (!global.contextoEncontre[userIP]) {
+    global.contextoEncontre[userIP] = {
+      ultimaEmpresa: null,
+      ultimaCategoria: null,
+      historico: [],
+      dadosEmpresa: null,
+    };
+  }
+
+  const contexto = global.contextoEncontre[userIP];
+  contexto.historico.push(prompt.toLowerCase());
+
+  const perguntasRelacionadas = [
+    "é bom",
+    "vale a pena",
+    "e o preço",
+    "qual o valor",
+    "qual o horário",
+    "fica aberto até que horas",
+    "é confiável",
+    "funciona no feriado",
+    "tem delivery",
+  ];
+
+  const promptEhRelacionado = perguntasRelacionadas.some((p) =>
+    prompt.toLowerCase().includes(p)
+  );
+
+  let promptFinal = prompt;
+  let systemPrompt = "";
+
+  if (promptEhRelacionado && contexto.ultimaEmpresa && contexto.dadosEmpresa) {
+    const c = contexto.dadosEmpresa;
+
+    const comentarios = [
+      "Ótimo atendimento!",
+      "Ambiente agradável.",
+      "Recomendado por muitos clientes.",
+    ].join(" | ");
+
+    systemPrompt = `
+Você é o Encontre.AI, um assistente local especializado em comércios de São Carlos - SP.
+
+O usuário está perguntando sobre o local:
+• ${c.nome} (${c.categoria}) - ${c.cidade || ""}/${c.estado || ""}
+  Tel: ${c.telefone || "N/A"}
+
+Sua tarefa:
+• Baseie sua resposta nas opiniões reais de clientes disponíveis na internet (Google Maps, redes sociais, sites de avaliação, etc.), conforme o seu conhecimento.
+• Faça um resumo geral das principais percepções dos clientes, citando pontos fortes e eventuais críticas, se souber.
+
+Responda como um especialista local que conhece a reputação do local.
+`.trim();
+  } else {
+    const categoriasPossiveis = [
+      "pizzaria",
+      "hamburguer",
+      "pastel",
+      "padaria",
+      "hotel",
+      "shopping",
+      "igreja",
+      "farmácia",
+      "bar",
+      "restaurante",
+      "marmita",
+      "lanche",
+      "churrascaria",
+      "estética",
+      "mercado",
+      "mecânica",
+      "barbearia",
+    ];
+
+    let categoriaDetectada = null;
+    for (let cat of categoriasPossiveis) {
+      if (prompt.toLowerCase().includes(cat)) {
+        categoriaDetectada = cat;
+        contexto.ultimaCategoria = cat;
+        break;
+      }
+    }
+
+    let query =
+      "SELECT nome, categoria, cidade, estado, telefone FROM public.comercios";
+    let params = [];
+
+    if (categoriaDetectada) {
+      query += " WHERE LOWER(categoria) LIKE $1 LIMIT 15";
+      params.push(`%${categoriaDetectada.toLowerCase()}%`);
+    } else {
+      query += " LIMIT 10";
+    }
+
+    const result = await pool.query(query, params);
+    const comercios = result.rows || [];
+
+    if (comercios.length > 0) {
+      contexto.ultimaEmpresa = comercios[0].nome;
+      contexto.dadosEmpresa = comercios[0];
+
+      const opinioes = comercios.map((c) => ({
+        nome: c.nome,
+        comentarios: [
+          "Ótimo atendimento!",
+          "Ambiente agradável.",
+          "Recomendado por muitos clientes.",
+        ],
+      }));
+
+      const listaComercios = comercios
+        .map((c, i) => {
+          const op = opinioes[i];
+          const comentarios = op?.comentarios?.slice(0, 2).join(" | ") || "";
+          return `• ${c.nome} (${c.categoria}) - ${c.cidade || ""}/${
+            c.estado || ""
+          }
+  Tel: ${c.telefone || "N/A"}
+  Opiniões: ${comentarios}`;
+        })
+        .join("\n\n");
+
+      systemPrompt = `
+Você é o Encontre.AI, um assistente local que ajuda pessoas a encontrar comércios e serviços em São Carlos - SP.
+
+Com base na pergunta abaixo, recomende locais da lista abaixo e inclua opiniões reais de clientes quando possível.
+
+Comércios disponíveis:
+${listaComercios}
+`.trim();
+    } else {
+      // Fallback: Se não achou nada no banco
+      systemPrompt = `
+Você é o Encontre.AI, um assistente que ajuda usuários a encontrar comércios, estabelecimentos ou serviços em São Carlos - SP.
+
+O sistema não encontrou locais correspondentes no banco de dados interno.
+
+Use o conhecimento geral do modelo para sugerir opções relevantes ou informações úteis sobre o tema pedido pelo usuário, como se estivesse buscando na web, mesmo que os dados sejam aproximados.
+
+Sempre que possível, destaque que as informações são baseadas em conhecimento geral e podem não ser exatas.
+`.trim();
+    }
+  }
+
+  try {
+    const respostaIA = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: "llama3-70b-8192",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: promptFinal },
+        ],
+      },
+      {
+        headers: {
+          Authorization: `Bearer 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`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const resposta = respostaIA.data.choices[0].message.content;
+    global.cacheEncontre[prompt.toLowerCase()] = resposta;
+
+    res.json({ resposta });
+  } catch (err) {
+    console.error("Erro no Encontre.AI:", err.message);
+    res.status(500).json({ error: "Erro interno ao gerar resposta com IA." });
+  }
+});
+
+app.listen(port, () => {
+  console.log(`Servidor rodando em http://localhost:${port}`);
+});
