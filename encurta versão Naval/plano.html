@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-br" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard - Encurta</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+  <div id="container-principal" class="w-full max-w-md">
+
+    <main id="dashboard-user" class="hidden bg-white rounded-xl shadow-lg p-8 w-full">
+        <div class="flex items-center space-x-4 mb-8">
+            <div id="user-avatar" class="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-md">
+                </div>
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Olá!</h1>
+                <p id="user-email" class="text-gray-500"></p>
+            </div>
+        </div>
+
+        <div id="plan-card" class="rounded-xl p-6 w-full text-white shadow-lg transition-all duration-300">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-sm opacity-80 uppercase tracking-wider">Seu Plano</p>
+                    <p id="plan-name" class="text-3xl font-extrabold"></p>
+                </div>
+                <div id="plan-status-badge" class="px-3 py-1 text-sm font-semibold rounded-full">
+                    </div>
+            </div>
+        </div>
+
+        <section class="mt-8 bg-gray-50 border border-gray-200 rounded-lg p-6 w-full text-center text-gray-700 text-sm leading-relaxed shadow-sm" aria-label="Informações sobre cancelamento de assinatura">
+            <h2 class="font-semibold text-lg mb-2 text-gray-800">Gerenciar sua assinatura</h2>
+            <p>
+                Para alterar ou cancelar seu plano, acesse sua conta no <strong>Mercado Pago</strong> na seção de <strong>"Assinaturas"</strong>.
+            </p>
+            <a href="https://www.mercadopago.com.br/minha-conta/assinaturas" target="_blank" rel="noopener noreferrer" class="inline-block mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2 rounded-md transition shadow-md hover:shadow-lg">
+                Ir para o Mercado Pago
+            </a>
+        </section>
+    </main>
+
+    <main id="dashboard-trial" class="hidden bg-white rounded-xl shadow-lg p-8 flex flex-col items-center text-center">
+        <h1 class="text-3xl font-extrabold mb-4 text-gray-900">Teste Gratuito Ativo!</h1>
+        <p class="text-gray-600 mb-8">Aproveite todos os recursos do Encurta.</p>
+
+        <div id="trial-active-section" class="w-full bg-green-50 border border-green-300 rounded-lg p-6 mb-8">
+            <p class="text-lg text-green-800">Seu teste expira em:</p>
+            <p id="countdown-timer" class="text-2xl font-bold text-green-900 mt-2"></p>
+        </div>
+
+        <div id="trial-expired-section" class="hidden w-full bg-red-50 border border-red-300 rounded-lg p-6 mb-8">
+            <p class="text-lg font-semibold text-red-800">Seu período de teste gratuito expirou!</p>
+            <p class="text-red-700 mt-2">Para continuar usando o Encurta, por favor, escolha um plano.</p>
+        </div>
+
+        <a id="upgrade-button" href="pay.html" class="bg-blue-600 hover:bg-blue-700 transition rounded-md text-white font-semibold px-8 py-3 w-full max-w-xs">
+            Planos do Encurta
+        </a>
+    <button id="logoutBtn" class="mt-6 bg-red-600 hover:bg-red-700 transition rounded-md text-white font-semibold px-8 py-3 w-full max-w-xs mx-auto block" type="button">
+      Sair do encurta
+    </button>
+    </main>
+  </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Referências aos elementos do DOM
+    const dashboardUser = document.getElementById('dashboard-user');
+    const dashboardTrial = document.getElementById('dashboard-trial');
+    const countdownTimerEl = document.getElementById('countdown-timer');
+    const trialActiveSection = document.getElementById('trial-active-section');
+    const trialExpiredSection = document.getElementById('trial-expired-section');
+    const upgradeButton = document.getElementById('upgrade-button');
+
+    // Pega dados do localStorage
+    const userStr = localStorage.getItem('user');
+    const trialStartDateStr = localStorage.getItem('trialStartDate');
+
+    let countdownInterval;
+
+    if (userStr) {
+        // --- CENÁRIO 1: USUÁRIO REGISTRADO ---
+        dashboardTrial.classList.add('hidden');
+        dashboardUser.classList.remove('hidden');
+
+        const user = JSON.parse(userStr);
+
+        // Referências aos novos elementos do DOM do dashboard melhorado
+        const userEmailEl = document.getElementById('user-email');
+        const userAvatarEl = document.getElementById('user-avatar');
+        const planCardEl = document.getElementById('plan-card');
+        const planNameEl = document.getElementById('plan-name');
+        const planStatusBadgeEl = document.getElementById('plan-status-badge');
+
+        // 1. Preenche o cabeçalho do usuário e o avatar
+        userEmailEl.textContent = user.email;
+        if (user.email) {
+            userAvatarEl.textContent = user.email[0].toUpperCase();
+        }
+
+        // 2. Configura o Cartão do Plano (Cores e Nomes)
+        if (user.plano === 'pro') {
+            planNameEl.textContent = 'Pro 💎';
+            planCardEl.classList.add('bg-gradient-to-br', 'from-gray-800', 'to-blue-900');
+        } else { // Assumindo 'lite' ou qualquer outro como padrão
+            planNameEl.textContent = 'Lite 🪙';
+            planCardEl.classList.add('bg-gradient-to-br', 'from-blue-500', 'to-blue-600');
+        }
+
+        // 3. Configura o Badge de Status do Pagamento
+        if (user.payment_status) {
+            planStatusBadgeEl.textContent = 'Ativo';
+            planStatusBadgeEl.classList.add('bg-green-400', 'text-green-900');
+        } else {
+            planStatusBadgeEl.textContent = 'Pendente';
+            planStatusBadgeEl.classList.add('bg-yellow-400', 'text-yellow-900');
+        }
+
+    } else if (trialStartDateStr) {
+        // --- CENÁRIO 2: USUÁRIO EM TESTE GRATUITO ---
+        dashboardUser.classList.add('hidden');
+        dashboardTrial.classList.remove('hidden');
+
+        const SEVEN_DAYS_IN_MS = 7 * 24 * 60 * 60 * 1000;
+        const trialStartDate = parseInt(trialStartDateStr, 10);
+        const trialEndDate = trialStartDate + SEVEN_DAYS_IN_MS;
+
+        function updateCountdown() {
+            const now = new Date().getTime();
+            const distance = trialEndDate - now;
+
+            if (distance > 0) {
+                // O teste ainda está ativo
+                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                
+                countdownTimerEl.textContent = `${days}d ${hours}h ${minutes}m`;
+            } else {
+                // O teste expirou
+                clearInterval(countdownInterval); // Para o contador
+                trialActiveSection.classList.add('hidden');
+                trialExpiredSection.classList.remove('hidden');
+                upgradeButton.textContent = 'Ver Planos'; // Muda o texto do botão
+            }
+        }
+        
+        updateCountdown(); // Chama uma vez para não esperar 1 segundo para exibir
+        countdownInterval = setInterval(updateCountdown, 60000); // Atualiza a cada minuto
+
+    } else {
+        // --- CENÁRIO 3: NÃO HÁ USUÁRIO NEM TESTE ATIVO ---
+        // Redireciona para a tela de login, pois o acesso é inválido
+        // alert('Acesso não autorizado! Por favor, faça login ou inicie um teste.');
+        window.location.href = 'login.html';
+    }
+
+    // Lógica do botão de Sair (Logout)
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+        clearInterval(countdownInterval); // Limpa o intervalo se existir
+        localStorage.removeItem('user');
+        localStorage.removeItem('trialStartDate');
+        window.location.href = 'login.html';
+    });
+});
+</script>
+
+</body>
+</html>

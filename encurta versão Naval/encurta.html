@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Otimizador de Rotas com Trânsito</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <!-- Google Maps JS API com libraries=places -->
+  <script
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBj5jmi5RbRsB8Lluysuu0jNvkPzgDw8DE&libraries=places"
+    defer
+  ></script>
+
+  <style>
+    /* Estilos personalizados para o mapa e a animação do marcador */
+    body {
+        font-family: 'Inter', sans-serif;
+    }
+    #map {
+      width: 100%;
+      height: 400px;
+      margin-top: 1rem;
+      border-radius: 0.75rem; /* Mais arredondado */
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Sombra suave */
+    }
+
+    /* Animação de pulsação para o marcador de localização */
+    @keyframes pulse {
+      0% {
+        transform: scale(0.8);
+        opacity: 0.7;
+      }
+      50% {
+        transform: scale(1.1);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(0.8);
+        opacity: 0.7;
+      }
+    }
+
+    .marker-pulse {
+      animation: pulse 1.5s infinite ease-in-out;
+    }
+
+    /* Estilo para a caixa de mensagem personalizada */
+    .message-box {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: #fff;
+      padding: 2rem;
+      border-radius: 0.75rem;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
+      text-align: center;
+      min-width: 300px;
+    }
+    .message-box button {
+      background-color: #60a5fa; /* Azul mais claro */
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.5rem;
+      margin-top: 1rem;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    .message-box button:hover {
+      background-color: #3b82f6; /* Azul mais escuro no hover */
+    }
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-blue-100 to-indigo-200 p-6 font-inter min-h-screen flex items-center justify-center">
+
+  <div class="max-w-xl w-full mx-auto bg-white p-8 rounded-xl shadow-lg space-y-6 transform transition-all duration-300">
+    <h1 class="text-3xl font-extrabold text-gray-900 text-center flex items-center justify-center gap-2">
+      <span class="text-4xl">🚗</span> Otimizador de Rotas
+    </h1>
+
+    <button onclick="pegarLocalizacao()" class="w-full bg-yellow-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-yellow-600 transition duration-300 ease-in-out transform hover:scale-105 shadow-md flex items-center justify-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-map-pin"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+      Usar minha localização atual
+    </button>
+
+    <div id="localizacao" class="text-sm text-gray-700 mt-2 text-center"></div>
+
+    <div id="enderecos" class="space-y-3 mt-4">
+      <input type="text" placeholder="Digite um destino" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-200" />
+    </div>
+
+    <button onclick="adicionarEndereco()" class="w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 transition duration-300 ease-in-out transform hover:scale-105 shadow-md flex items-center justify-center gap-2">
+       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-plus-circle"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+      Adicionar outro destino
+    </button>
+
+    <button onclick="otimizarRota()" class="w-full bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition duration-300 ease-in-out transform hover:scale-105 shadow-md flex items-center justify-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-send"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      Otimizar Rota
+    </button>
+
+    <div id="resultado" class="mt-4 text-sm text-gray-700 bg-gray-50 p-4 rounded-lg border border-gray-200"></div>
+
+    <div id="map"></div>
+  </div>
+
+  <script>
+    // É fundamental substituir 'YOUR_API_KEY' pela sua chave da API do Google Maps.
+    // Lembre-se de restringir o uso da chave no console do Google Cloud para evitar uso indevido.
+    
+    let map;
+    let directionsService;
+    let directionsRenderer;
+    let origemLatLng;
+    let marcadorUsuario;
+    let origem; // Variável para armazenar a string de origem para a rota
+
+    // Função para exibir mensagens personalizadas
+    function showMessage(message) {
+      // Remove qualquer caixa de mensagem existente
+      const existingMessageBox = document.querySelector('.message-box');
+      if (existingMessageBox) {
+        existingMessageBox.remove();
+      }
+      const existingOverlay = document.querySelector('.overlay');
+      if (existingOverlay) {
+        existingOverlay.remove();
+      }
+
+      const overlay = document.createElement('div');
+      overlay.className = 'overlay';
+      document.body.appendChild(overlay);
+
+      const messageBox = document.createElement('div');
+      messageBox.className = 'message-box';
+      messageBox.innerHTML = `
+        <p class="text-lg text-gray-800">${message}</p>
+        <button onclick="closeMessageBox()">OK</button>
+      `;
+      document.body.appendChild(messageBox);
+    }
+
+    // Função para fechar a caixa de mensagem personalizada
+    function closeMessageBox() {
+      const messageBox = document.querySelector('.message-box');
+      if (messageBox) {
+        messageBox.remove();
+      }
+      const overlay = document.querySelector('.overlay');
+      if (overlay) {
+        overlay.remove();
+      }
+    }
+
+
+    function initMap() {
+      // Inicializa o mapa com centro padrão provisório (São Paulo)
+      map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: -23.55052, lng: -46.633308 },
+        zoom: 12,
+        streetViewControl: false,
+        mapTypeControl: false,
+      });
+
+      directionsService = new google.maps.DirectionsService();
+      directionsRenderer = new google.maps.DirectionsRenderer({
+          suppressMarkers: true, // Suprimimos os marcadores padrão para usar os nossos
+      });
+      directionsRenderer.setMap(map);
+
+      // Tenta pegar a localização do usuário assim que carrega o mapa
+      pegarLocalizacao();
+    }
+
+    function pegarLocalizacao() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            origemLatLng = new google.maps.LatLng(lat, lng);
+            origem = { lat, lng }; // Define a origem como um objeto LatLngLiteral
+
+            // Centraliza e dá zoom na localização
+            map.setCenter(origemLatLng);
+            map.setZoom(15);
+
+            // Remove o marcador existente se houver
+            if (marcadorUsuario) {
+              marcadorUsuario.setMap(null);
+            }
+
+            // Adiciona um marcador personalizado para a localização do usuário
+            marcadorUsuario = new google.maps.Marker({
+              position: origemLatLng,
+              map: map,
+              title: "Você está aqui",
+              icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 8,
+                fillColor: "#4285F4",
+                fillOpacity: 1,
+                strokeColor: "white",
+                strokeWeight: 3,
+              },
+              // A classe de animação CSS é mais eficiente
+            });
+            
+            // Adiciona a classe de animação ao elemento do marcador
+            // Usar um pequeno timeout garante que o elemento do marcador foi renderizado
+            setTimeout(() => {
+                const markerElement = marcadorUsuario.getIcon().element;
+                 if(markerElement) markerElement.classList.add('marker-pulse');
+            }, 500);
+
+            document.getElementById("localizacao").innerHTML = `<span class="font-semibold text-green-600">📍 Ponto de partida definido!</span>`;
+          },
+          () => {
+            showMessage("Não foi possível obter sua localização. Por favor, verifique as permissões do navegador.");
+          }
+        );
+      } else {
+        showMessage("Geolocalização não suportada neste navegador.");
+      }
+    }
+
+    function adicionarEndereco() {
+      const container = document.getElementById('enderecos');
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = 'Digite um destino';
+      input.className = 'w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-200 mt-2';
+      container.appendChild(input);
+
+      // Adiciona o Autocomplete a este novo campo
+      const autocomplete = new google.maps.places.Autocomplete(input);
+      autocomplete.bindTo('bounds', map);
+    }
+
+    async function otimizarRota() {
+      const inputs = document.querySelectorAll('#enderecos input');
+      const destinos = Array.from(inputs).map(i => i.value.trim()).filter(e => e !== '');
+
+      if (!origem) {
+        showMessage('Por favor, clique em "Usar minha localização atual" primeiro para definir o ponto de partida.');
+        return;
+      }
+
+      if (destinos.length < 1) {
+        showMessage('Adicione pelo menos um destino para otimizar a rota.');
+        return;
+      }
+
+      const resultadoDiv = document.getElementById('resultado');
+      resultadoDiv.innerHTML = '<span class="text-blue-600 font-semibold">Calculando a rota mais rápida com base no trânsito atual...</span>';
+
+      try {
+        // Mapeia os destinos para o formato de waypoints que a API espera
+        const waypoints = destinos.map(d => ({ location: d, stopover: true }));
+
+        // Define a requisição para o serviço de direções
+        const request = {
+          origin: origem,
+          destination: origem, // A rota otimizada volta para a origem
+          waypoints: waypoints,
+          optimizeWaypoints: true, // Otimiza a ordem dos waypoints
+          travelMode: google.maps.TravelMode.DRIVING,
+          // *** NOVO: Adiciona opções de direção para considerar o trânsito ***
+          drivingOptions: {
+            departureTime: new Date(), // Partida "agora"
+            trafficModel: google.maps.TrafficModel.BEST_GUESS // Usa dados históricos e em tempo real
+          }
+        };
+
+        directionsService.route(request, (response, status) => {
+          if (status === 'OK') {
+            directionsRenderer.setDirections(response);
+
+            const route = response.routes[0];
+            const legs = route.legs;
+
+            let ordemTexto = `<p class="font-bold text-gray-800">Ordem otimizada (considerando trânsito):</p><ol class="list-decimal list-inside space-y-2 mt-2">`;
+            let totalDistance = 0;
+            let totalDuration = 0;
+
+            // Itera sobre os segmentos da rota para construir o resumo
+            legs.forEach((leg, index) => {
+              const startAddress = leg.start_address.split(',')[0]; // Pega uma versão curta do endereço
+              const endAddress = leg.end_address.split(',')[0];
+              
+              // *** NOVO: Usa 'duration_in_traffic' se disponível ***
+              const duration = leg.duration_in_traffic || leg.duration; // Fallback para duração normal
+              
+              totalDistance += leg.distance.value;
+              totalDuration += duration.value;
+              
+              // Adiciona ícone de carro e formata o texto
+              ordemTexto += `<li class="flex items-center gap-2">🚗 <strong>${startAddress}</strong> para <strong>${endAddress}</strong>: <span class="text-blue-600 font-semibold">${duration.text}</span></li>`;
+            });
+
+            ordemTexto += `</ol>`;
+
+            // Calcula os totais
+            const totalDistanceKm = (totalDistance / 1000).toFixed(1);
+            const totalHours = Math.floor(totalDuration / 3600);
+            const totalMinutes = Math.round((totalDuration % 3600) / 60);
+
+            // Monta o resumo final
+            let totalTimeText = "";
+            if (totalHours > 0) {
+                totalTimeText += `${totalHours}h `;
+            }
+            totalTimeText += `${totalMinutes}min`;
+            
+            ordemTexto += `<div class="mt-4 pt-4 border-t border-gray-200">`;
+            ordemTexto += `<p class="font-bold text-gray-800">Resumo da Rota:</p>`;
+            ordemTexto += `<p><strong>Distância Total:</strong> ${totalDistanceKm} km</p>`;
+            ordemTexto += `<p><strong>Tempo Total (com trânsito):</strong> ${totalTimeText}</p>`;
+            ordemTexto += `</div>`;
+
+            resultadoDiv.innerHTML = ordemTexto;
+          } else {
+            resultadoDiv.innerHTML = '<span class="text-red-500">❌ Não foi possível calcular a rota:</span> ' + status;
+          }
+        });
+      } catch (error) {
+        console.error('Erro ao otimizar rota:', error);
+        resultadoDiv.innerHTML = '<span class="text-red-500">❌ Ocorreu um erro inesperado ao calcular a rota.</span>';
+      }
+    }
+    
+    // Função para inicializar o autocomplete no primeiro campo de endereço
+    function initializeAutocomplete() {
+        const firstInput = document.querySelector('#enderecos input');
+        const autocomplete = new google.maps.places.Autocomplete(firstInput);
+        autocomplete.bindTo('bounds', map);
+    }
+
+    // Aguarda API do Google carregar e inicializar o mapa
+    window.addEventListener("load", () => {
+      const checkGoogleMaps = () => {
+        if (typeof google !== "undefined" && google.maps && google.maps.places) {
+          initMap();
+          initializeAutocomplete();
+        } else {
+          setTimeout(checkGoogleMaps, 100);
+        }
+      };
+      checkGoogleMaps();
+    });
+  </script>
+
+</body>
+</html>

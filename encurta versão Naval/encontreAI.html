@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Encontre.AI - São Carlos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        #inputPergunta:focus {
+            outline: none;
+            box-shadow: none;
+            ring-width: 0;
+        }
+        .fade-in-up {
+            animation: fadeInUp 0.4s ease-out;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-out {
+            animation: fadeOut 0.3s ease-out forwards;
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 flex flex-col h-screen antialiased text-gray-300">
+
+    <main id="chat" class="flex-1 flex items-center justify-center overflow-y-auto p-4 w-full">
+        <div id="chat-content" class="w-full max-w-3xl h-full flex flex-col items-center justify-center">
+            <div id="welcomeMessage" class="text-center">
+                <h1 class="text-4xl sm:text-5xl font-bold tracking-tight">
+                    <span class="bg-gradient-to-r from-cyan-500 via-purple-400 to-pink-300 text-transparent bg-clip-text">
+                        O que posso ajudar?
+                    </span>
+                </h1>
+            </div>
+        </div>
+    </main>
+
+    <footer class="p-4 mb-4">
+        <form id="formPergunta" class="max-w-3xl mx-auto flex items-center bg-gray-800/70 backdrop-blur-sm border border-gray-700/50 rounded-full p-2 shadow-2xl">
+            <input 
+                id="inputPergunta" 
+                type="text" 
+                placeholder="Pergunte alguma coisa"
+                class="flex-1 bg-transparent px-4 py-2 text-lg placeholder-gray-500 border-none focus:ring-0" 
+            />
+            <button id="sendButton" class="bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-gray-300 p-3 rounded-full transition-colors duration-200">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+                    <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
+                </svg>
+            </button>
+        </form>
+    </footer>
+
+    <script>
+        const form = document.getElementById('formPergunta');
+        const input = document.getElementById('inputPergunta');
+        const chatContent = document.getElementById('chat-content');
+        const welcomeMessage = document.getElementById('welcomeMessage');
+        const sendButton = document.getElementById('sendButton');
+        let isFirstMessage = true;
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const pergunta = input.value.trim();
+            if (!pergunta) return;
+
+            input.disabled = true;
+            sendButton.disabled = true;
+
+            if (isFirstMessage) {
+                welcomeMessage.classList.add('fade-out');
+                welcomeMessage.addEventListener('animationend', () => welcomeMessage.remove());
+                chatContent.classList.remove('items-center', 'justify-center');
+                chatContent.classList.add('justify-start', 'space-y-4');
+                isFirstMessage = false;
+            }
+
+            renderUserMessage(pergunta);
+            input.value = '';
+
+            const thinkingIndicator = renderThinkingIndicator();
+
+            try {
+                const res = await fetch('http://localhost:8080/api/groq-encontre', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ prompt: pergunta })
+                });
+
+                thinkingIndicator.remove();
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({ error: 'Não foi possível ler a mensagem de erro.' }));
+                    throw new Error(errorData.error || `Erro HTTP: ${res.status}`);
+                }
+                
+                const data = await res.json();
+                const botMessageElement = createBotMessageBubble();
+                await renderFormattedBotResponse(botMessageElement, data.resposta || 'Recebi uma resposta vazia. 🥲');
+
+            } catch (err) {
+                if(thinkingIndicator) thinkingIndicator.remove();
+                const errorBubble = createBotMessageBubble();
+                errorBubble.innerHTML = `Erro: ${err.message} 🧠💥`;
+                scrollChat();
+
+            } finally {
+                input.disabled = false;
+                sendButton.disabled = false;
+                input.focus();
+            }
+        });
+
+        function scrollChat() {
+            chatContent.parentElement.scrollTop = chatContent.parentElement.scrollHeight;
+        }
+
+        function renderUserMessage(text) {
+            const msgWrapper = document.createElement('div');
+            msgWrapper.className = `fade-in-up w-full flex justify-end`;
+            msgWrapper.innerHTML = `
+                <div class="bg-gradient-to-br from-cyan-600 to-purple-600 text-white rounded-lg p-3 break-words max-w-xl">
+                    ${text}
+                </div>`;
+            chatContent.appendChild(msgWrapper);
+            scrollChat();
+        }
+
+        function renderThinkingIndicator() {
+            const msgWrapper = document.createElement('div');
+            msgWrapper.className = `fade-in-up w-full flex justify-start`;
+            msgWrapper.innerHTML = `
+                <div class="flex items-center gap-2 bg-gray-800 rounded-lg p-3 px-4">
+                    <div class="h-2 w-2 bg-gray-500 rounded-full animate-pulse [animation-delay:0s]"></div>
+                    <div class="h-2 w-2 bg-gray-500 rounded-full animate-pulse [animation-delay:0.2s]"></div>
+                    <div class="h-2 w-2 bg-gray-500 rounded-full animate-pulse [animation-delay:0.4s]"></div>
+                </div>`;
+            chatContent.appendChild(msgWrapper);
+            scrollChat();
+            return msgWrapper;
+        }
+
+        function createBotMessageBubble() {
+            const msgWrapper = document.createElement('div');
+            msgWrapper.className = `fade-in-up w-full flex justify-start`;
+            
+            const bubble = document.createElement('div');
+            bubble.className = "flex items-start gap-3";
+            bubble.innerHTML = `
+                <div class="w-1.5 h-full min-h-full bg-gradient-to-b from-cyan-400 to-purple-500 rounded-full"></div>
+                <div class="bot-text bg-gray-800 rounded-lg p-3 text-gray-300 break-words leading-relaxed"></div>`;
+
+            msgWrapper.appendChild(bubble);
+            chatContent.appendChild(msgWrapper);
+            scrollChat();
+
+            return bubble.querySelector('.bot-text');
+        }
+
+        // FUNÇÃO ATUALIZADA PARA FORMATAR A RESPOSTA
+        async function renderFormattedBotResponse(element, text) {
+            // 1. Converte o Markdown (*texto*) para HTML (<strong>texto</strong>)
+            let formattedText = text.replace(/\*(.*?)\*/g, '<strong>$1</strong>');
+            
+            // 2. Converte quebras de linha (\n) para tags de quebra de linha HTML (<br>)
+            formattedText = formattedText.replace(/\n/g, '<br>');
+            
+            // 3. Insere o conteúdo totalmente formatado no elemento de uma vez
+            element.innerHTML = formattedText;
+            scrollChat();
+        }
+
+    </script>
+</body>
+</html>

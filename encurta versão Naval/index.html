@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Encurta v5.1 - Otimizador com Google Maps</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <script>
+        function initServices() {
+            setupApplication();
+        }
+    </script>
+    
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBj5jmi5RbRsB8Lluysuu0jNvkPzgDw8DE&libraries=places&callback=initServices" defer></script>
+
+    <style>
+        html, body {
+            height: 100vh; width: 100vw; margin: 0; padding: 0;
+            overflow: hidden; font-family: 'Inter', sans-serif; background-color: #111827;
+        }
+        #map {
+            height: 60%; width: 100%; position: absolute; top: 0; left: 0;
+            z-index: 1; background-color: #1a202c;
+        }
+        
+        #profile-icon {
+            position: absolute;
+            top: 3.0rem;      
+            right: 1rem;      
+            z-index: 5;       
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;      
+            height: 44px;     
+            background-color: rgba(31, 41, 55, 0.9); 
+            border: 3px solid #7a7b7d;
+            border-radius: 9999px; 
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        #profile-icon:hover {
+            background-color: #3b82f6; 
+            transform: scale(1.1);   
+        }
+
+        .control-panel {
+            position: fixed;
+            left: 0; right: 0;
+            top: 60%; 
+            bottom: 0;
+            height: auto;
+            background-color: rgba(17, 24, 39, 0.9); backdrop-filter: blur(10px);
+            box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.4);
+            z-index: 10; padding: 1rem 1rem 1.5rem 1rem;
+            border-top: 2px solid #ffffff5a;
+            overflow-y: auto;
+            transition: top 0.6s ease-in-out, height 0.4s ease-in-out, max-height 0.4s ease-in-out;
+        }
+
+        .control-panel::-webkit-scrollbar { width: 5px; }
+        .control-panel::-webkit-scrollbar-track { background: transparent; }
+        .control-panel::-webkit-scrollbar-thumb { background-color: #4b5563; border-radius: 20px; }
+        
+        .custom-input {
+            background-color: #374151; border: 1px solid #4b5563; color: #f3f4f6;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .custom-input::placeholder { color: #9ca3af; }
+        .custom-input:focus {
+            outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+        }
+        .btn {
+            display: flex; align-items: center; justify-content: center; gap: 0.75rem; font-weight: 600;
+            padding: 0.75rem 1rem; border-radius: 0.75rem; transition: all 0.2s ease-in-out;
+            cursor: pointer; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); border: none;
+        }
+        .btn:disabled {
+            background-color: #374151;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        .btn-primary { background-color: #2563eb; color: white; }
+        .btn-primary:hover:not(:disabled) { background-color: #1d4ed8; transform: translateY(-2px); }
+        .btn-secondary { background-color: #4b5563; color: white; }
+        .btn-secondary:hover:not(:disabled) { background-color: #374151; transform: translateY(-2px); }
+        #resultado {
+            background-color: rgba(31, 41, 55, 0.7); border: 1px solid #4b5563; min-height: 80px;
+            padding: 1rem; border-radius: 0.75rem; color: #d1d5db; font-size: 0.875rem;
+            line-height: 1.5; overflow-y: auto;
+        }
+        .message-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px); z-index: 999; display: flex; 
+            align-items: flex-start;
+            justify-content: center; 
+            padding: 15vh 1rem 1rem;
+        }
+        
+        .message-box {
+            background-color: #1f2937; color: #e5e7eb; padding: 2rem; border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4); text-align: center; width: 90%; max-width: 450px;
+            border: 1px solid #4b5563;
+        }
+        .message-box input { width: 100%; padding: 0.75rem; margin-bottom: 1.5rem; }
+        .loader {
+            width: 50px; aspect-ratio: 1; border-radius: 50%;
+            background: radial-gradient(farthest-side, #3b82f6 94%, #0000) top/8px 8px no-repeat, conic-gradient(#0000 30%, #3b82f6);
+            -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 8px), #000 0);
+            animation: l13 1s infinite linear; margin: 1rem auto;
+        }
+        @keyframes l13{ 100%{transform: rotate(1turn)} }
+        
+        .listening {
+            color: #3b82f6;
+            animation: listening-glow 1.5s ease-in-out infinite;
+        }
+        @keyframes listening-glow {
+            0% { box-shadow: 0 0 0 0px rgba(59, 130, 246, 0.4); }
+            100% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+        }
+        
+        #close-panel-btn {
+            display: none; position: absolute; top: 1rem; right: 1rem; z-index: 20;
+            background-color: rgba(239, 68, 68, 0.8); border-radius: 9999px; padding: 0.5rem; color: white;
+            transition: background-color 0.2s ease-in-out;
+        }
+        #close-panel-btn:hover { background-color: rgba(220, 38, 38, 0.9); }
+        .control-panel.keyboard-active #close-panel-btn { display: flex; }
+        
+        #header-action-buttons { transition: transform 0.3s ease-in-out; }
+        .control-panel.keyboard-active #header-action-buttons { transform: translateX(-48px); }
+        
+        @media (max-width: 768px) {
+            .control-panel.keyboard-active {
+                top: 5vh; bottom: 0; height: auto; max-height: 95vh;
+                border-radius: 1.5rem 1.5rem 0 0;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .control-panel {
+                top: auto; bottom: 0; height: auto; max-height: 40vh;
+            }
+            .control-panel.keyboard-active {
+                max-height: 90vh;
+            }
+        }
+/* === ESTILOS PARA LIMPAR A UI DO GOOGLE MAPS === */
+        /* Oculta os links e botões de controle do mapa, mantendo o copyright e o logo do Google */
+        .gmnoprint,                              /* Oculta 'Atalhos do teclado' */
+        a[href*="terms_maps.html"],              /* Oculta o link dos 'Termos' */
+        a[title="Informar erro no mapa"],        /* Oculta o link 'Informar erro no mapa' */
+        .gm-fullscreen-control                   /* Oculta o botão de tela cheia */
+        {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <a id="profile-icon" href="plano.html" title="Ver Perfil">
+        <i data-lucide="user-round" size="24"></i>
+    </a>
+
+    <div id="map"></div>
+    <div class="control-panel">
+        <button id="close-panel-btn" title="Fechar Painel" class="btn" onclick="closeControlPanel()">
+            <i data-lucide="x" size="20"></i>
+        </button>
+
+        <div class="max-w-xl mx-auto">
+            <div class="flex flex-col space-y-4">
+                <div class="flex justify-between items-center w-full mb-2">
+                    <h1 class="text-2xl font-bold text-white flex items-baseline gap-2">
+                        Encurta <span class="text-xs font-light text-gray-400">v5.1</span>
+                    </h1>
+                    <div id="header-action-buttons" class="flex gap-2">
+                         <button id="set-home-btn" title="Definir endereço de casa" class="btn btn-secondary p-2.5" onclick="definirEnderecoCasa()">
+                            <i data-lucide="home" size="20"></i>
+                        </button>
+                        <button id="clear-cache-btn" title="Limpar cache de endereços" class="btn btn-secondary p-2.5" onclick="clearGeocodingCache()">
+                            <i data-lucide="trash-2" size="20"></i>
+                        </button>
+                        <button id="save-route-btn" title="Salvar rota atual" class="btn btn-secondary p-2.5" onclick="promptAndSaveCurrentRoute()" disabled>
+                            <i data-lucide="save" size="20"></i>
+                        </button>
+                        <button id="saved-routes-btn" title="Ver rotas salvas" class="btn btn-secondary p-2.5" onclick="showSavedRoutesList()">
+                            <i data-lucide="route" size="20"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="enderecos" class="space-y-3">
+                    <div class="relative">
+                        <i data-lucide="map-pin" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size="20"></i>
+                        <input type="text" id="origem" placeholder="Ponto de Partida" class="w-full p-3 pl-10 pr-10 rounded-lg custom-input transition duration-200" />
+                        <i data-lucide="home" id="use-home-btn" title="Usar endereço de casa" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-blue-400 cursor-pointer transition-colors" size="20" onclick="usarEnderecoCasa()"></i>
+                    </div>
+                    <div id="paradas-container"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="adicionarParada()" class="btn btn-secondary">
+                        <i data-lucide="plus-circle" size="20"></i> Adicionar
+                    </button>
+                    <button onclick="showImportModal()" class="btn btn-secondary">
+                        <i data-lucide="clipboard-paste" size="20"></i> Importar
+                    </button>
+                </div>
+                 <div class="col-span-2">
+                    <button onclick="otimizarRota()" class="btn btn-primary py-3 text-base w-full">
+                        <i data-lucide="route" size="20"></i> Otimizar
+                    </button>
+                </div>
+                <div id="resultado-container" class="pt-2 hidden">
+                    <div id="localizacao" class="text-sm text-center h-5 mb-2 font-medium"></div>
+                    <div id="resultado"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+<script>
+// =================================================================================
+// JAVASCRIPT COMPLETO E FINAL
+// =================================================================================
+
+lucide.createIcons();
+
+// --- Variáveis Globais ---
+let map, routePolyline = null, homeMarker = null;
+let routeMarkers = [];
+let lastSuccessfulOrigin = '', lastSuccessfulStops = []; 
+const SAVED_ROUTES_KEY = 'encurtaSavedRoutesList';
+
+// --- Lógica de Armazenamento Local (LocalStorage) ---
+const getStorageItem = (key) => { try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : null; } catch (e) { console.error(`Erro ao ler ${key}:`, e); return null; }};
+const setStorageItem = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { console.error(`Erro ao salvar ${key}:`, e); }};
+
+// --- FUNÇÃO CORE: Otimização via Back-end ---
+async function otimizarRota() {
+    clearRouteFromMap();
+    const origin = document.getElementById('origem').value.trim();
+    const stops = Array.from(document.querySelectorAll('.parada-input')).map(i => i.value.trim()).filter(Boolean);
+
+    if (!origin) return showMessage('Defina um ponto de partida.', 'error');
+    if (stops.length === 0) return showMessage('Adicione pelo menos uma parada.', 'error');
+
+    document.getElementById('resultado-container').classList.remove('hidden');
+    showLoadingInResult('Conectando ao servidor e otimizando...');
+
+    lastSuccessfulOrigin = origin;
+    lastSuccessfulStops = [...stops];
+
+    try {
+        const response = await fetch('http://localhost:8080/optimize-route', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ origin, stops })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.details || errorData.error || 'Erro na comunicação com o servidor.');
+        }
+
+        const data = await response.json();
+        
+        displayRouteOnMap([data.origin, ...data.optimizedRoute]);
+        renderizarResultados(data.origin, data.optimizedRoute, data.totalDistance);
+        
+        document.getElementById('save-route-btn').disabled = false; 
+
+    } catch (error) {
+        document.getElementById('resultado-container').classList.add('hidden');
+        clearResult();
+        showMessage(error.toString(), 'error');
+    }
+}
+
+function showImportModal() {
+    const existingOverlay = document.querySelector('.message-overlay');
+    if (existingOverlay) existingOverlay.remove(); 
+
+    const overlay = document.createElement('div');
+    overlay.className = 'message-overlay';
+    const close = () => overlay.remove();
+
+    overlay.innerHTML = `
+        <div class="message-box text-left">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-white">Importar Endereços</h3>
+                <i data-lucide="mic" class="text-gray-400 cursor-pointer hover:text-blue-400 transition" size="24" title="Falar Endereços" onclick="iniciarReconhecimentoParaImportacao(this)"></i>
+            </div>
+            <p class="text-sm text-gray-400 mb-3">Cole ou fale os endereços abaixo (um por linha). As paradas atuais serão substituídas.</p>
+            <textarea id="import-textarea" class="w-full h-40 p-3 rounded-lg custom-input" placeholder="Rua João da Silva, 123\nAvenida Brasil, 456\nPraça da Sé, Centro"></textarea>
+            <div class="grid grid-cols-2 gap-3 mt-6">
+                <button id="import-cancel" class="btn btn-secondary">Cancelar</button>
+                <button id="import-confirm" class="btn btn-primary">Importar</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+    lucide.createIcons();
+    const textarea = document.getElementById('import-textarea');
+    textarea.focus();
+
+    document.getElementById('import-confirm').onclick = () => {
+        const addresses = textarea.value.trim().split('\n').map(addr => addr.trim()).filter(addr => addr.length > 0);
+
+        if (addresses.length > 0) {
+            document.getElementById('paradas-container').innerHTML = '';
+            addresses.forEach(address => adicionarParada(address));
+            showMessage(`${addresses.length} endereços importados com sucesso!`, 'info');
+        }
+        close();
+    };
+
+    document.getElementById('import-cancel').onclick = close;
+}
+// --- Funções de Renderização e Exibição no Mapa ---
+function renderizarResultados(originPoint, optimizedRoute, totalDistance) {
+    const resultadoDiv = document.getElementById('resultado');
+    const rotaCompleta = [originPoint, ...optimizedRoute];
+
+    let outputHtml = `<p class="font-bold text-white mb-2">Rota Otimizada:</p><ol class="list-decimal list-inside space-y-1.5">`;
+    rotaCompleta.forEach((ponto, index) => {
+        const label = (index === 0) ? 'Partida:' : `Parada ${index}:`;
+        outputHtml += `<li><strong>${label}</strong> ${ponto.name.split(',')[0]}</li>`;
+    });
+
+    outputHtml += `</ol>
+    <div class="mt-3 pt-3 border-t border-gray-600 flex flex-col items-center">
+        <p class="font-semibold text-white">Distância Aérea Total: ${totalDistance} km</p>
+    </div>
+    <div class="mt-4">
+        <button onclick="abrirNoMaps()" class="btn btn-primary w-full"><i data-lucide="map" size="20"></i> Abrir no Maps</button>
+    </div>`;
+    
+    resultadoDiv.innerHTML = outputHtml;
+    lucide.createIcons();
+
+    window.lastOptimizedRouteForMaps = rotaCompleta;
+}
+
+function displayRouteOnMap(routePoints) {
+    if (!map || !routePoints) return;
+    clearRouteFromMap();
+    if (homeMarker) homeMarker.setMap(null); 
+    
+    const bounds = new google.maps.LatLngBounds();
+    const path = [];
+
+    routePoints.forEach((point, index) => {
+        const position = new google.maps.LatLng(point.lat, point.lng);
+        path.push(position);
+        
+        const marker = new google.maps.Marker({
+            position, map,
+            label: { text: `${index}`, color: 'white', fontWeight: 'bold' },
+            icon: { path: google.maps.SymbolPath.CIRCLE, scale: 12, fillColor: index === 0 ? '#10B981' : '#3B82F6', fillOpacity: 1, strokeWeight: 2, strokeColor: 'white' },
+            title: `${index === 0 ? 'Partida' : 'Parada ' + index}: ${point.name}`
+        });
+        routeMarkers.push(marker);
+        bounds.extend(position);
+    });
+
+    if (path.length > 0) {
+        routePolyline = new google.maps.Polyline({ path, geodesic: true, strokeColor: '#4A90E2', strokeOpacity: 0.8, strokeWeight: 4 });
+        routePolyline.setMap(map);
+        map.fitBounds(bounds);
+    }
+}
+
+function clearRouteFromMap() {
+    if(homeMarker) homeMarker.setMap(map);
+    routeMarkers.forEach(marker => marker.setMap(null));
+    routeMarkers = [];
+    if (routePolyline) routePolyline.setMap(null);
+    routePolyline = null;
+    document.getElementById('save-route-btn').disabled = true;
+}
+
+function abrirNoMaps() {
+    if (!window.lastOptimizedRouteForMaps || window.lastOptimizedRouteForMaps.length < 2) {
+         return showMessage('Otimize uma rota primeiro.', 'info');
+    }
+    const route = window.lastOptimizedRouteForMaps;
+    const origin = route[0];
+    const destination = route[route.length - 1];
+    const waypoints = route.slice(1, -1).map(p => encodeURIComponent(p.name)).join('|');
+    let url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin.name)}&destination=${encodeURIComponent(destination.name)}`;
+    if (waypoints) {
+        url += `&waypoints=${waypoints}`;
+    }
+    window.open(url, '_blank');
+}
+
+
+// --- Funções de UI (Pop-ups, Loaders, etc) ---
+async function showConfirm(message) {
+    return new Promise(resolve => {
+        const existingOverlay = document.querySelector('.message-overlay');
+        if (existingOverlay) existingOverlay.remove();
+        const overlay = document.createElement('div');
+        overlay.className = 'message-overlay';
+        
+        const handleResolve = (value) => {
+            overlay.remove();
+            resolve(value);
+        };
+
+        overlay.innerHTML = `
+            <div class="message-box">
+                <p class="text-lg mb-6 text-center">${message}</p>
+                <div class="grid grid-cols-2 gap-3 mt-6">
+                    <button id="confirm-no" class="btn btn-secondary">Não</button>
+                    <button id="confirm-yes" class="btn btn-primary">Sim</button>
+                </div>
+            </div>`;
+        
+        document.body.appendChild(overlay);
+        document.getElementById('confirm-yes').onclick = () => handleResolve(true);
+        document.getElementById('confirm-no').onclick = () => handleResolve(false);
+    });
+}
+
+function showMessage(message, type = 'info') {
+    const existingOverlay = document.querySelector('.message-overlay');
+    if (existingOverlay) existingOverlay.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'message-overlay';
+    const icon = type === 'error' ? `<i data-lucide="alert-triangle" class="text-red-400 mx-auto mb-4" size="48"></i>` : `<i data-lucide="info" class="text-blue-400 mx-auto mb-4" size="48"></i>`;
+    overlay.innerHTML = `<div class="message-box">${icon}<p class="text-lg mb-6 text-center">${message}</p><button onclick="this.parentElement.parentElement.remove()" class="btn btn-primary px-8">OK</button></div>`;
+    document.body.appendChild(overlay);
+    lucide.createIcons();
+}
+
+function showPrompt(message, defaultValue = '') {
+    return new Promise(resolve => {
+        const existingOverlay = document.querySelector('.message-overlay');
+        if (existingOverlay) existingOverlay.remove();
+        const overlay = document.createElement('div');
+        overlay.className = 'message-overlay';
+        const close = () => { overlay.remove(); resolve(null); };
+        overlay.innerHTML = `
+            <div class="message-box">
+                <p class="text-lg mb-4 text-center">${message}</p>
+                <input type="text" id="prompt-input" class="w-full p-3 rounded-lg custom-input" value="${defaultValue}">
+                <div class="grid grid-cols-2 gap-3 mt-6">
+                    <button id="prompt-cancel" class="btn btn-secondary">Cancelar</button>
+                    <button id="prompt-ok" class="btn btn-primary">Salvar</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+        const input = document.getElementById('prompt-input');
+        input.focus();
+        input.select();
+        document.getElementById('prompt-ok').onclick = () => {
+            const value = input.value;
+            overlay.remove();
+            resolve(value);
+        };
+        document.getElementById('prompt-cancel').onclick = close;
+    });
+}
+
+function showLoadingInResult(text = "Processando...") {
+    const resultadoDiv = document.getElementById('resultado');
+    resultadoDiv.innerHTML = `<div class="loader"></div><p class="text-center text-blue-300">${text}</p>`;
+}
+
+function clearResult() {
+    document.getElementById('resultado').innerHTML = '';
+}
+
+
+// --- Funções de Gerenciamento de Endereços (Paradas, Casa, etc.) ---
+function adicionarParada(value = '') {
+    const container = document.getElementById('paradas-container');
+    const novoInputDiv = document.createElement('div');
+    novoInputDiv.className = 'relative mt-3';
+    novoInputDiv.innerHTML = `
+        <i data-lucide="flag" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size="20"></i>
+        <input type="text" placeholder="Digite uma parada" class="w-full p-3 pl-10 pr-20 rounded-lg custom-input transition duration-200 parada-input" value="${value}">
+        <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+            <i data-lucide="mic" class="text-gray-400 cursor-pointer hover:text-blue-400 transition" size="20" onclick="iniciarReconhecimentoDeVoz(this)"></i>
+            <i data-lucide="x-circle" class="text-gray-500 cursor-pointer hover:text-red-400 transition" size="20" onclick="removerParada(this)"></i>
+        </div>`;
+    container.appendChild(novoInputDiv);
+    lucide.createIcons();
+}
+
+function removerParada(iconElement) {
+    iconElement.closest('.relative').remove();
+}
+
+async function geocodeSingleAddressOnBackend(address) {
+    try {
+        const response = await fetch('http://localhost:8080/geocode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enderecos: [address] })
+        });
+        if (!response.ok) throw new Error('Falha ao geocodificar endereço no servidor.');
+        const data = await response.json();
+        if (data.resultados && data.resultados[0] && !data.resultados[0].error) {
+            return {
+                address: data.resultados[0].endereco,
+                coords: { lat: data.resultados[0].latitude, lng: data.resultados[0].longitude }
+            };
+        } else {
+            throw new Error(data.resultados[0]?.error || 'Endereço inválido.');
+        }
+    } catch (error) {
+        console.error("Erro ao geocodificar endereço:", error);
+        throw error;
+    }
+}
+
+async function definirEnderecoCasa(isInitialSetup = false) {
+    const enderecoAntigo = getStorageItem('homeAddress')?.address || '';
+    const promptMessage = isInitialSetup 
+        ? 'Bem-vindo! Para começar, defina seu endereço principal (casa/partida):'
+        : 'Digite seu novo endereço de casa:';
+    
+    const novoEndereco = await showPrompt(promptMessage, enderecoAntigo);
+
+    if (novoEndereco && novoEndereco.trim()) {
+        document.getElementById('resultado-container').classList.remove('hidden');
+        showLoadingInResult('Verificando endereço...');
+        try {
+            const homeData = await geocodeSingleAddressOnBackend(novoEndereco);
+            setStorageItem('homeAddress', homeData);
+            checkHomeAddressStatus();
+            showMessage('Endereço de casa salvo com sucesso!', 'info');
+            displayHomeOnMap();
+            prefillHomeAddress();
+            clearResult();
+            document.getElementById('resultado-container').classList.add('hidden');
+        } catch (error) {
+            clearResult();
+            document.getElementById('resultado-container').classList.add('hidden');
+            showMessage(`Não foi possível encontrar o endereço: ${error.message}`, 'error');
+        }
+    }
+}
+
+function usarEnderecoCasa() {
+    const homeData = getStorageItem('homeAddress');
+    if (homeData) {
+        document.getElementById('origem').value = homeData.address;
+    } else {
+        definirEnderecoCasa();
+    }
+}
+
+function checkHomeAddressStatus() {
+    const useHomeBtn = document.getElementById('use-home-btn');
+    if (getStorageItem('homeAddress')) {
+        useHomeBtn.classList.remove('text-gray-500');
+        useHomeBtn.classList.add('text-blue-400');
+    } else {
+        useHomeBtn.classList.add('text-gray-500');
+        useHomeBtn.classList.remove('text-blue-400');
+    }
+}
+
+function prefillHomeAddress() {
+    const homeData = getStorageItem('homeAddress');
+    if (homeData && document.getElementById('origem').value === '') {
+        document.getElementById('origem').value = homeData.address;
+    }
+}
+
+function displayRouteOnMap(routePoints) {
+    if (!map || !routePoints || routePoints.length === 0) return;
+
+    // Limpa quaisquer dados de uma rota anterior.
+    clearRouteFromMap();
+    // Garante que o marcador de casa (se existir) permaneça visível.
+    if (homeMarker) homeMarker.setMap(map); 
+
+    const bounds = new google.maps.LatLngBounds();
+    routePoints.forEach(point => {
+        const position = new google.maps.LatLng(point.lat, point.lng);
+        bounds.extend(position);
+    });
+
+    // A rota não será mais desenhada. Apenas ajustamos o zoom e a posição
+    // do mapa para englobar todos os pontos da origem e das paradas.
+    if (!bounds.isEmpty()) {
+        // O valor '100' adiciona um preenchimento (padding) de 100px ao redor dos pontos.
+        map.fitBounds(bounds, 100); 
+    }
+}
+
+// --- Funções de Salvar e Carregar Rota ---
+async function promptAndSaveCurrentRoute() {
+    if (!lastSuccessfulOrigin || lastSuccessfulStops.length === 0) return showMessage('Não há rota para salvar.', 'error');
+    const defaultName = `Rota de ${new Date().toLocaleDateString('pt-BR')}`;
+    const routeName = await showPrompt('Dê um nome para esta rota:', defaultName);
+
+    if (routeName && routeName.trim()) {
+        const newRoute = { 
+            name: routeName.trim(), 
+            origin: lastSuccessfulOrigin, 
+            stops: lastSuccessfulStops 
+        };
+        const routes = getStorageItem(SAVED_ROUTES_KEY) || [];
+        routes.push(newRoute);
+        setStorageItem(SAVED_ROUTES_KEY, routes);
+        showMessage('Rota salva com sucesso!', 'info');
+    }
+}
+
+function showSavedRoutesList() {
+    const routes = getStorageItem(SAVED_ROUTES_KEY) || [];
+    const existingOverlay = document.querySelector('.message-overlay');
+    if (existingOverlay) existingOverlay.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'message-overlay';
+
+    let contentHtml;
+    if (routes.length === 0) {
+        contentHtml = `
+            <i data-lucide="info" class="text-blue-400 mx-auto mb-4" size="48"></i>
+            <p class="text-lg mb-6 text-center">Nenhuma rota salva ainda.</p>
+            <button onclick="this.closest('.message-overlay').remove()" class="btn btn-primary px-8">OK</button>
+        `;
+    } else {
+        let routesHtml = routes.map((route, index) => `
+            <div class="flex items-center justify-between p-3 bg-gray-700 rounded-lg mb-2">
+                <span class="text-white font-medium truncate pr-2">${route.name}</span>
+                <div class="flex-shrink-0 flex gap-2">
+                    <button onclick="loadRouteFromList(${index})" class="btn btn-secondary p-2" title="Carregar Rota"><i data-lucide="upload" size="18"></i></button>
+                    <button onclick="deleteRoute(${index})" class="btn btn-secondary p-2 hover:bg-red-500" title="Excluir Rota"><i data-lucide="trash-2" size="18"></i></button>
+                </div>
+            </div>
+        `).join('');
+
+        contentHtml = `
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-white">Rotas Salvas</h3>
+                <i data-lucide="x" size="24" class="cursor-pointer text-gray-400 hover:text-white" onclick="this.closest('.message-overlay').remove()"></i>
+            </div>
+            <div class="max-h-60 overflow-y-auto pr-2">${routesHtml}</div>
+        `;
+    }
+
+    overlay.innerHTML = `<div class="message-box text-left">${contentHtml}</div>`;
+
+    document.body.appendChild(overlay);
+    lucide.createIcons();
+}
+
+function loadRouteFromList(index) {
+    const routes = getStorageItem(SAVED_ROUTES_KEY) || [];
+    const route = routes[index];
+    if (!route) return;
+    
+    document.getElementById('origem').value = route.origin;
+    const container = document.getElementById('paradas-container');
+    container.innerHTML = '';
+    if (route.stops && route.stops.length > 0) {
+        route.stops.forEach(stopValue => adicionarParada(stopValue));
+    } else {
+        adicionarParada(); 
+    }
+    
+    document.querySelector('.message-overlay')?.remove();
+    showMessage(`Rota "${route.name}" carregada. Clique em "Otimizar".`, 'info');
+    clearRouteFromMap();
+    document.getElementById('resultado-container').classList.add('hidden');
+}
+
+async function deleteRoute(index) {
+    if (await showConfirm('Tem certeza que deseja excluir esta rota?')) {
+        const routes = getStorageItem(SAVED_ROUTES_KEY) || [];
+        routes.splice(index, 1);
+        setStorageItem(SAVED_ROUTES_KEY, routes);
+        
+        document.querySelector('.message-overlay')?.remove();
+        showSavedRoutesList();
+    }
+}
+
+async function clearGeocodingCache() {
+    if (await showConfirm('Isso limpará seu endereço de casa e todas as rotas salvas. Deseja continuar?')) {
+        localStorage.removeItem('homeAddress');
+        localStorage.removeItem(SAVED_ROUTES_KEY);
+        
+        checkHomeAddressStatus();
+        if (homeMarker) homeMarker.setMap(null);
+        homeMarker = null;
+        
+        document.getElementById('origem').value = '';
+        
+        showMessage('Cache de endereços e rotas limpo.', 'info');
+    }
+}
+
+
+// --- Reconhecimento de Voz ---
+function iniciarReconhecimentoDeVoz(iconElement) {
+    if (!('webkitSpeechRecognition' in window)) {
+        return showMessage('Reconhecimento de voz não é suportado neste navegador.', 'error');
+    }
+
+    const inputField = iconElement.closest('.relative').querySelector('.parada-input');
+    if (!inputField) return;
+
+    const recognition = new webkitSpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => iconElement.classList.add('listening');
+    recognition.onend = () => iconElement.classList.remove('listening');
+    recognition.onerror = (event) => {
+        iconElement.classList.remove('listening');
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+            showMessage('Erro no reconhecimento de voz: ' + event.error, 'error');
+        }
+    };
+    recognition.onresult = (event) => {
+        inputField.value = event.results[0][0].transcript.trim();
+    };
+    recognition.start();
+}
+
+function iniciarReconhecimentoParaImportacao(iconElement) {
+    if (!('webkitSpeechRecognition' in window)) {
+        return showMessage('Reconhecimento de voz não é suportado neste navegador.', 'error');
+    }
+    
+    const textarea = document.getElementById('import-textarea');
+    if (!textarea) return;
+
+    const recognition = new webkitSpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => iconElement.classList.add('listening');
+    recognition.onend = () => iconElement.classList.remove('listening');
+    recognition.onerror = (event) => {
+        iconElement.classList.remove('listening');
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+            showMessage('Erro no reconhecimento de voz: ' + event.error, 'error');
+        }
+    };
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript.trim();
+        if (transcript) {
+            textarea.value += (textarea.value.trim() ? '\n' : '') + transcript;
+            textarea.scrollTop = textarea.scrollHeight;
+        }
+    };
+    recognition.start();
+}
+
+
+// --- Setup Inicial da Aplicação ---
+function setupApplication() {
+    if (typeof google === 'undefined' || typeof google.maps === 'undefined') {
+        return showMessage('Não foi possível carregar a API do Google Maps.', 'error');
+    }
+    
+    map = new google.maps.Map(document.getElementById('map'), {
+        zoom: 4,
+        center: { lat: -14.235, lng: -51.925 },
+        mapTypeControl: false,
+        fullscreenControl: false,
+        zoomControl: false,
+        streetViewControl: false,
+        disableDefaultUI: true,
+        styles: [{ "elementType": "geometry", "stylers": [{ "color": "#242f3e" }] }, { "elementType": "labels.text.stroke", "stylers": [{ "color": "#242f3e" }] }, { "elementType": "labels.text.fill", "stylers": [{ "color": "#746855" }] }, { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] }, { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] }, { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#263c3f" }] }, { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#6b9a76" }] }, { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#38414e" }] }, { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#212a37" }] }, { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#9ca5b3" }] }, { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#746855" }] }, { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1f2835" }] }, { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#f3d19c" }] }, { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#2f3948" }] }, { "featureType": "transit.station", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] }, { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#17263c" }] }, { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#515c6d" }] }, { "featureType": "water", "elementType": "labels.text.stroke", "stylers": [{ "color": "#17263c" }] }]
+    });
+
+    adicionarParada();
+    checkHomeAddressStatus();
+    
+    // VERIFICAÇÃO DE PRIMEIRO USO
+    if (!getStorageItem('homeAddress')) {
+        // Se não houver endereço 'casa' salvo, inicia o fluxo para defini-lo.
+        definirEnderecoCasa(true); 
+    } else {
+        // Se já existir, apenas preenche o campo e mostra no mapa.
+        prefillHomeAddress();
+        displayHomeOnMap();
+    }
+    
+    setupKeyboardListeners();
+}
+
+function setupKeyboardListeners() {
+    const controlPanel = document.querySelector('.control-panel');
+    controlPanel.addEventListener('focusin', (e) => {
+        if (e.target.matches('input[type="text"], textarea')) {
+            controlPanel.classList.add('keyboard-active');
+        }
+    });
+}
+
+function closeControlPanel() {
+    const controlPanel = document.querySelector('.control-panel');
+    controlPanel.classList.remove('keyboard-active');
+    if (document.activeElement) document.activeElement.blur();
+}
+</script>
+</body>
+</html>

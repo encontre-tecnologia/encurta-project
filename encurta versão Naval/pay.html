@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Planos de Assinatura - Otimizador de Rotas</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white antialiased">
+    
+    <div class="container mx-auto px-8 py-8 sm:py-12 md:py-16">
+        
+        <header class="text-center max-w-4xl mx-auto mb-12 md:mb-16">
+            <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-white">
+                Escolha o plano que acelera o seu caminho.
+            </h1>
+            <p class="mt-4 text-lg md:text-xl text-gray-400">
+                Comece de graça e evolua conforme sua necessidade. Sem compromisso.
+            </p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+
+            <div class="bg-gray-800/50 p-6 md:p-8 rounded-2xl shadow-xl border border-gray-700 w-full h-full flex flex-col">
+                <div class="flex-grow">
+                    <h2 class="text-2xl font-bold text-white">Pessoal</h2>
+                    <p class="text-gray-400 mt-2 mb-6">Perfeito para testar e para otimizações rápidas.</p>
+                    
+                    <div class="mb-6">
+                        <span class="text-4xl sm:text-5xl font-extrabold text-white">Grátis</span>
+                    </div>
+
+                    <ul class="text-gray-300 space-y-3 text-left mb-8">
+                        <li class="flex items-center gap-3"><i data-lucide="check" class="text-green-500" size="20"></i><span><strong>3 otimizações</strong> por dia</span></li>
+                        <li class="flex items-center gap-3"><i data-lucide="check" class="text-green-500" size="20"></i><span>Até <strong>8 paradas</strong> por rota</span></li>
+                        <li class="flex items-center gap-3"><i data-lucide="check" class="text-green-500" size="20"></i><span>Salvar até <strong>2 rotas</strong></span></li>
+                        <li class="flex items-center gap-3"><i data-lucide="x-circle" class="text-gray-500" size="20"></i><span class="text-gray-500">Otimização com trânsito</span></li>
+                        <li class="flex items-center gap-3"><i data-lucide="x-circle" class="text-gray-500" size="20"></i><span class="text-gray-500">Exportar rotas</span></li>
+                    </ul>
+                </div>
+                
+                <a href="login.html" class="mt-auto w-full inline-flex items-center justify-center gap-2 text-lg font-semibold px-6 py-3 rounded-lg text-gray-300 bg-gray-700 hover:bg-gray-600 transition-all duration-200 ease-in-out">
+                    Começar Agora
+                </a>
+            </div>
+
+            <div class="bg-gray-800/50 p-6 md:p-8 rounded-2xl shadow-2xl border-2 border-blue-500 w-full relative h-full flex flex-col ring-2 ring-blue-500/50">
+                <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-xs sm:text-sm font-bold px-4 py-1 rounded-full shadow-lg">
+                    MAIS POPULAR
+                </div>
+                
+                <div class="flex-grow">
+                    <h2 class="text-2xl font-bold text-white">Profissional</h2>
+                    <p class="text-blue-300 mt-2 mb-6">Para otimizações essenciais do dia a dia.</p>
+                    
+                    <div class="mb-6">
+                        <span class="text-4xl sm:text-5xl font-extrabold text-white">R$39</span>
+                        <span class="text-lg sm:text-xl font-medium text-gray-400">,90/mês</span>
+                    </div>
+
+                    <ul class="text-gray-300 space-y-3 text-left mb-8">
+                        <li class="flex items-center gap-3"><i data-lucide="check" class="text-green-500" size="20"></i><span>Otimizações de rota <strong>ilimitadas</strong></span></li>
+                        <li class="flex items-center gap-3"><i data-lucide="check" class="text-green-500" size="20"></i><span>Até <strong>75 paradas</strong> por rota</span></li>
+                        <li class="flex items-center gap-3"><i data-lucide="check" class="text-green-500" size="20"></i><span>Salvar rotas <strong>ilimitadas</strong></span></li>
+                        <li class="flex items-center gap-3"><i data-lucide="check" class="text-green-500" size="20"></i><span>Suporte padrão por e-mail</span></li>
+                    </ul>
+                </div>
+                
+                <a href="#" id="professional-plan-link" class="mt-auto w-full inline-flex items-center justify-center gap-2 text-lg font-semibold px-6 py-3 rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-all duration-200 ease-in-out transform hover:-translate-y-1 shadow-lg hover:shadow-blue-500/30">
+                    Assinar o Profissional
+                </a>
+            </div>
+
+            <div class="bg-gray-800/50 p-6 md:p-8 rounded-2xl shadow-xl border border-gray-700 w-full h-full flex flex-col">
+                <div class="flex-grow">
+                    <h2 class="text-2xl font-bold text-white">Logística</h2>
+                    <p class="text-gray-400 mt-2 mb-6">Para empresas que buscam máxima eficiência.</p>
+                    
+                    <div class="mb-6">
+                        <span class="text-4xl sm:text-5xl font-extrabold text-white">R$89</span>
+                        <span class="text-lg sm:text-xl font-medium text-gray-400">,90/mês</span>
+                    </div>
+
+                    <ul class="text-gray-300 space-y-3 text-left mb-8">
+                        <li class="flex items-center gap-3"><i data-lucide="check-circle-2" class="text-blue-400" size="20"></i><span class="font-semibold">Tudo do plano Profissional, e mais:</span></li>
+                        <li class="flex items-center gap-3"><i data-lucide="check" class="text-green-500" size="20"></i><span>Até <strong>200 paradas</strong> por rota</span></li>
+                         <li class="flex items-center gap-3"><i data-lucide="check" class="text-green-500" size="20"></i><span><strong>Gerenciamento de Equipe</strong> (3 usuários)</span></li>
+                        <li class="flex items-center gap-3"><i data-lucide="check" class="text-green-500" size="20"></i><span>Otimização com <strong>trânsito em tempo real</strong></span></li>
+                        <li class="flex items-center gap-3"><i data-lucide="check" class="text-green-500" size="20"></i><span><strong>Exportar rotas</strong> (PDF/Excel)</span></li>
+                        <li class="flex items-center gap-3"><i data-lucide="check" class="text-green-500" size="20"></i><span>Suporte <strong>prioritário</strong></span></li>
+                    </ul>
+                </div>
+                
+                <a href="#" id="logistics-plan-link" class="mt-auto w-full inline-flex items-center justify-center gap-2 text-lg font-semibold px-6 py-3 rounded-lg text-white bg-gray-600 hover:bg-gray-700 transition-all duration-200 ease-in-out transform hover:-translate-y-1 shadow-lg hover:shadow-gray-500/30">
+                    Assinar o Logística
+                </a>
+            </div>
+        </main>
+
+        <footer class="text-center mt-12 md:mt-16">
+            <a href="index.html" id="btn-voltar" class="text-gray-400 hover:text-white font-medium transition-colors inline-flex items-center gap-2">
+                <i data-lucide="arrow-left" size="16"></i>
+                Voltar ao Início
+            </a>
+        </footer>
+        </div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // Ativa os ícones do Lucide
+    lucide.createIcons();
+
+    // Links de pagamento dos planos (MANTIVE OS SEUS LINKS ORIGINAIS)
+    const PROFESSIONAL_PLAN_LINK = "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=2c938084979341770197982e7f6b0166"; // Antigo Lite
+    const LOGISTICS_PLAN_LINK = "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=2c938084979341770197983039490167";  // Antigo Pro
+    
+    // Aponta os botões para os respectivos links de assinatura
+    const professionalBtn = document.getElementById('professional-plan-link');
+    const logisticsBtn = document.getElementById('logistics-plan-link');
+
+    if (professionalBtn) professionalBtn.href = PROFESSIONAL_PLAN_LINK;
+    if (logisticsBtn) logisticsBtn.href = LOGISTICS_PLAN_LINK;
+
+    // Lógica de redirecionamento do botão "Voltar"
+    const btnVoltar = document.getElementById('btn-voltar');
+    const urlParams = new URLSearchParams(window.location.search);
+    const pagamento = urlParams.get('pagamento');
+
+    if (btnVoltar && pagamento === 'false') {
+      btnVoltar.href = 'login.html';
+    }
+  });
+</script>
+
+</body>
+</html>

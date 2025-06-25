@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login | Rota Certa</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Poppins -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* Estilo para usar a fonte Poppins com Tailwind */
+    body {
+      font-family: 'Poppins', sans-serif;
+    }
+    /* Animação de entrada suave */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .fade-in-up {
+      animation: fadeInUp 0.6s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="bg-gray-100">
+
+  <div class="flex items-center justify-center min-h-screen p-6 bg-gradient-to-tr from-blue-50 to-blue-300">
+
+    <!-- Container do Formulário de Login -->
+    <div class="w-full max-w-md">
+      
+      <!-- Card do Formulário -->
+      <div class="bg-white rounded-2xl shadow-xl p-8 fade-in-up" style="animation-delay: 0.3s;">
+        
+        <h2 class="text-4xl font-bold text-gray-800 text-center">Encurta</h2>
+        <p class="text-gray-500 text-center mt-2 mb-8">Otimize suas rotas, maximize suas entregas.</p>
+
+        <!-- Formulário -->
+        <form id="loginForm" class="space-y-5">
+          
+          <!-- Input de E-mail -->
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+              <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M3 4a2 2 0 012-2h10a2 2 0 012 2v1.158l-7 3.5-7-3.5V4z" />
+                <path d="M3 7.159V16a2 2 0 002 2h10a2 2 0 002-2V7.159l-7 3.5-7-3.5z" />
+              </svg>
+            </span>
+            <input 
+              type="email" 
+              id="email" 
+              placeholder="Seu e-mail" 
+              required 
+              class="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+            />
+          </div>
+
+          <!-- Input de Senha -->
+          <div class="relative">
+             <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+               <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                 <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd" />
+               </svg>
+             </span>
+            <input 
+              type="password" 
+              id="password" 
+              placeholder="Sua senha" 
+              required 
+              class="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+            />
+            <!-- Ícone para mostrar/ocultar senha -->
+            <button type="button" id="togglePassword" class="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer">
+              <svg id="eye-icon" class="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+               <svg id="eye-off-icon" class="h-5 w-5 text-gray-500 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 1.274-4.057 5.064-7 9.542-7 .847 0 1.673.124 2.468.352M7.5 7.5l9 9M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Botão de Entrar -->
+          <button type="submit" class="w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 active:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:-translate-y-1 shadow-md">
+            Entrar
+          </button>
+        </form>
+
+        <!-- Divisor "ou" -->
+        <div class="my-6 flex items-center text-center">
+            <hr class="flex-grow border-t border-gray-300">
+            <span class="px-4 text-sm text-gray-500 font-medium">ou</span>
+            <hr class="flex-grow border-t border-gray-300">
+        </div>
+        
+        <!-- Seção de Trial -->
+        <div id="trial-section" class="space-y-4">
+            <button type="button" id="plansButton" class="w-full bg-orange-500 text-white font-semibold py-3 rounded-lg hover:bg-orange-600 active:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-transform transform hover:-translate-y-1 shadow-md">
+              Conheça nossos planos
+            </button>
+            <button type="button" id="trialButton" class="w-full bg-green-500 text-white font-semibold py-3 rounded-lg hover:bg-green-600 active:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform transform hover:-translate-y-1 shadow-md">
+              Testar por 7 dias grátis
+            </button>
+        </div>
+
+        <!-- Mensagem de Erro/Status -->
+        <p id="message" class="mt-6 text-center text-red-600 font-medium min-h-[24px]"></p>
+      </div>
+    </div>
+  </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // ---- LÓGICA DE VISIBILIDADE DA SENHA ----
+    const togglePassword = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('password');
+    const eyeIcon = document.getElementById('eye-icon');
+    const eyeOffIcon = document.getElementById('eye-off-icon');
+
+    togglePassword.addEventListener('click', () => {
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        eyeIcon.classList.toggle('hidden');
+        eyeOffIcon.classList.toggle('hidden');
+    });
+
+    // ---- LÓGICA DO FREE TRIAL (CORRIGIDA) ----
+    const trialButton = document.getElementById('trialButton');
+    const trialStartDateKey = 'trialStartDate';
+    const trialStartDate = localStorage.getItem(trialStartDateKey);
+    const SEVEN_DAYS_IN_MS = 7 * 24 * 60 * 60 * 1000;
+
+    const disableTrialButton = () => {
+        trialButton.disabled = true;
+        trialButton.textContent = 'Trial Expirado';
+        trialButton.classList.remove('bg-green-500', 'hover:bg-green-600', 'active:bg-green-700', 'hover:-translate-y-1');
+        trialButton.classList.add('bg-gray-400', 'cursor-not-allowed');
+    };
+
+    if (trialStartDate) {
+        const now = new Date().getTime();
+        const trialStartTime = parseInt(trialStartDate, 10);
+        if ((now - trialStartTime) > SEVEN_DAYS_IN_MS) {
+            disableTrialButton();
+        }
+    }
+
+    trialButton.addEventListener('click', () => {
+        if (trialButton.disabled) {
+            return;
+        }
+        trialButton.disabled = true;
+        trialButton.textContent = 'Carregando...';
+        trialButton.classList.add('cursor-wait', 'opacity-75');
+
+        if (!localStorage.getItem(trialStartDateKey)) {
+            localStorage.setItem(trialStartDateKey, new Date().getTime());
+        }
+        
+        // CORREÇÃO APLICADA AQUI: A linha de redirecionamento foi ativada.
+        setTimeout(() => {
+            console.log("Iniciando teste gratuito e redirecionando...");
+            window.location.href = 'index.html'; // Esta linha agora está ativa.
+        }, 1000);
+    });
+    
+    // ---- LÓGICA DO BOTÃO DE PLANOS ----
+    const plansButton = document.getElementById('plansButton');
+    plansButton.addEventListener('click', () => {
+        plansButton.disabled = true;
+        plansButton.textContent = 'Carregando...';
+        plansButton.classList.add('cursor-wait', 'opacity-75');
+        setTimeout(() => {
+            console.log("Redirecionando para a tela de planos...");
+            window.location.href = 'pay.html'; // Esta linha também deve estar ativa.
+        }, 1000);
+    });
+
+    // ---- SCRIPT DE LOGIN CONECTADO AO BACKEND ----
+    document.getElementById('loginForm').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const messageElement = document.getElementById('message');
+        const submitButton = this.querySelector('button[type="submit"]');
+
+        messageElement.textContent = '';
+        submitButton.disabled = true;
+        submitButton.textContent = 'Autenticando...';
+        const backendEndpoint = 'http://localhost:8080/api/login';
+
+        try {
+            const response = await fetch(backendEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+                localStorage.setItem('user', JSON.stringify({
+                    id: data.user_id,
+                    email: email,
+                    payment_status: data.payment_status,
+                    plano: data.plano,
+                }));
+                messageElement.textContent = 'Login bem-sucedido! Redirecionando...';
+                messageElement.classList.remove('text-red-600');
+                messageElement.classList.add('text-green-600');
+                if (data.payment_status === true) {
+                    setTimeout(() => window.location.href = 'index.html', 1500);
+                } else {
+                    setTimeout(() => window.location.href = 'pay.html?pagamento=false', 1500);
+
+                }
+            } else {
+                messageElement.textContent = data.error || 'Erro ao fazer login. Tente novamente.';
+                messageElement.classList.add('text-red-600');
+            }
+        } catch (error) {
+            console.error('Erro de conexão:', error);
+            messageElement.textContent = 'Não foi possível conectar ao servidor.';
+            messageElement.classList.add('text-red-600');
+        } finally {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Entrar';
+        }
+    });
+});
+</script>
+</body>
+</html>
