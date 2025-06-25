@@ -1,0 +1,25 @@
+{
+  "name": "encurtamaps",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "expo": "~53.0.12",
+    "expo-av": "^15.1.6",
+    "expo-location": "^18.1.5",
+    "expo-speech": "~13.1.7",
+    "expo-status-bar": "~2.2.3",
+    "react": "19.0.0",
+    "react-native": "0.79.4",
+    "react-native-webview": "^13.15.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0"
+  },
+  "private": true
+}
